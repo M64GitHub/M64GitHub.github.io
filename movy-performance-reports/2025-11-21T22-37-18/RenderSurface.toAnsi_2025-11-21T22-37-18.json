@@ -1,0 +1,90 @@
+{
+  "test_name": "RenderSurface.toAnsi",
+  "timestamp": "2025-11-21T22-37-18",
+  "system_info": {
+    "cpu_model": "aarch64 (apple_m4)",
+    "cpu_cores": 10,
+    "os": "macos",
+    "zig_version": "0.15.2",
+    "build_mode": "ReleaseFast"
+  },
+  "results": [
+    {
+      "name": "10x10",
+      "width": 10,
+      "height": 10,
+      "pixels": 100,
+      "iterations": 100000,
+      "elapsed_ns": 26808500,
+      "time_per_iter_us": 0.26808499999999996,
+      "iter_per_sec": 3730160.210381036,
+      "megapixels_per_sec": 373.0160210381036
+    },
+    {
+      "name": "20x20",
+      "width": 20,
+      "height": 20,
+      "pixels": 400,
+      "iterations": 100000,
+      "elapsed_ns": 114022125,
+      "time_per_iter_us": 1.14022125,
+      "iter_per_sec": 877022.7707999654,
+      "megapixels_per_sec": 350.80910831998614
+    },
+    {
+      "name": "40x40",
+      "width": 40,
+      "height": 40,
+      "pixels": 1600,
+      "iterations": 100000,
+      "elapsed_ns": 474850583,
+      "time_per_iter_us": 4.74850583,
+      "iter_per_sec": 210592.56022857194,
+      "megapixels_per_sec": 336.94809636571506
+    },
+    {
+      "name": "64x64",
+      "width": 64,
+      "height": 64,
+      "pixels": 4096,
+      "iterations": 100000,
+      "elapsed_ns": 1071233000,
+      "time_per_iter_us": 10.71233,
+      "iter_per_sec": 93350.37288806449,
+      "megapixels_per_sec": 382.3631273495122
+    },
+    {
+      "name": "80x80",
+      "width": 80,
+      "height": 80,
+      "pixels": 6400,
+      "iterations": 100000,
+      "elapsed_ns": 1865509125,
+      "time_per_iter_us": 18.65509125,
+      "iter_per_sec": 53604.66944915105,
+      "megapixels_per_sec": 343.0698844745667
+    },
+    {
+      "name": "100x100",
+      "width": 100,
+      "height": 100,
+      "pixels": 10000,
+      "iterations": 100000,
+      "elapsed_ns": 2846718750,
+      "time_per_iter_us": 28.4671875,
+      "iter_per_sec": 35128.16290685548,
+      "megapixels_per_sec": 351.2816290685548
+    },
+    {
+      "name": "200x200",
+      "width": 200,
+      "height": 200,
+      "pixels": 40000,
+      "iterations": 100000,
+      "elapsed_ns": 11185035834,
+      "time_per_iter_us": 111.85035834,
+      "iter_per_sec": 8940.516730042333,
+      "megapixels_per_sec": 357.6206692016933
+    }
+  ]
+}

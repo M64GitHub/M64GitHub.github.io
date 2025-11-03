@@ -1,0 +1,211 @@
+{
+  "test_name": "RenderEngine.render_stable_with_toAnsi",
+  "timestamp": "2025-11-21T22-37-18",
+  "system_info": {
+    "cpu_model": "aarch64 (apple_m4)",
+    "cpu_cores": 10,
+    "os": "macos",
+    "zig_version": "0.15.2",
+    "build_mode": "ReleaseFast"
+  },
+  "results": [
+    {
+      "name": "64x64",
+      "width": 64,
+      "height": 64,
+      "pixels": 4096,
+      "iterations": 100000,
+      "elapsed_ns": 1010779833,
+      "time_per_iter_us": 10.10779833,
+      "iter_per_sec": 98933.51324907172,
+      "megapixels_per_sec": 405.2316702681978
+    },
+    {
+      "name": "96x96",
+      "width": 96,
+      "height": 96,
+      "pixels": 9216,
+      "iterations": 100000,
+      "elapsed_ns": 1367828542,
+      "time_per_iter_us": 13.67828542,
+      "iter_per_sec": 73108.57825337,
+      "megapixels_per_sec": 673.7686571830579
+    },
+    {
+      "name": "128x128",
+      "width": 128,
+      "height": 128,
+      "pixels": 16384,
+      "iterations": 100000,
+      "elapsed_ns": 1831936250,
+      "time_per_iter_us": 18.3193625,
+      "iter_per_sec": 54587.05236058296,
+      "megapixels_per_sec": 894.3542658757912
+    },
+    {
+      "name": "160x160",
+      "width": 160,
+      "height": 160,
+      "pixels": 25600,
+      "iterations": 100000,
+      "elapsed_ns": 2403217125,
+      "time_per_iter_us": 24.03217125,
+      "iter_per_sec": 41610.88857087767,
+      "megapixels_per_sec": 1065.2387474144684
+    },
+    {
+      "name": "192x192",
+      "width": 192,
+      "height": 192,
+      "pixels": 36864,
+      "iterations": 100000,
+      "elapsed_ns": 3053223875,
+      "time_per_iter_us": 30.53223875,
+      "iter_per_sec": 32752.265832455538,
+      "megapixels_per_sec": 1207.379527647641
+    },
+    {
+      "name": "256x256",
+      "width": 256,
+      "height": 256,
+      "pixels": 65536,
+      "iterations": 100000,
+      "elapsed_ns": 4700880208,
+      "time_per_iter_us": 47.00880208,
+      "iter_per_sec": 21272.611846143005,
+      "megapixels_per_sec": 1394.121889948828
+    },
+    {
+      "name": "64x36",
+      "width": 64,
+      "height": 36,
+      "pixels": 2304,
+      "iterations": 100000,
+      "elapsed_ns": 803034500,
+      "time_per_iter_us": 8.030345,
+      "iter_per_sec": 124527.65105359732,
+      "megapixels_per_sec": 286.91170802748826
+    },
+    {
+      "name": "96x54",
+      "width": 96,
+      "height": 54,
+      "pixels": 5184,
+      "iterations": 100000,
+      "elapsed_ns": 1089772750,
+      "time_per_iter_us": 10.8977275,
+      "iter_per_sec": 91762.25043248695,
+      "megapixels_per_sec": 475.69550624201236
+    },
+    {
+      "name": "128x72",
+      "width": 128,
+      "height": 72,
+      "pixels": 9216,
+      "iterations": 100000,
+      "elapsed_ns": 1387859834,
+      "time_per_iter_us": 13.87859834,
+      "iter_per_sec": 72053.38575999167,
+      "megapixels_per_sec": 664.0440031640833
+    },
+    {
+      "name": "160x90",
+      "width": 160,
+      "height": 90,
+      "pixels": 14400,
+      "iterations": 100000,
+      "elapsed_ns": 1740422084,
+      "time_per_iter_us": 17.40422084,
+      "iter_per_sec": 57457.326541255265,
+      "megapixels_per_sec": 827.3855021940758
+    },
+    {
+      "name": "192x108",
+      "width": 192,
+      "height": 108,
+      "pixels": 20736,
+      "iterations": 100000,
+      "elapsed_ns": 2123780250,
+      "time_per_iter_us": 21.2378025,
+      "iter_per_sec": 47085.85080777543,
+      "megapixels_per_sec": 976.3722023500313
+    },
+    {
+      "name": "256x144",
+      "width": 256,
+      "height": 144,
+      "pixels": 36864,
+      "iterations": 100000,
+      "elapsed_ns": 3056747875,
+      "time_per_iter_us": 30.56747875,
+      "iter_per_sec": 32714.507080502997,
+      "megapixels_per_sec": 1205.9875890156627
+    },
+    {
+      "name": "36x64",
+      "width": 36,
+      "height": 64,
+      "pixels": 2304,
+      "iterations": 100000,
+      "elapsed_ns": 799454333,
+      "time_per_iter_us": 7.994543330000001,
+      "iter_per_sec": 125085.31866322375,
+      "megapixels_per_sec": 288.1965742000675
+    },
+    {
+      "name": "54x96",
+      "width": 54,
+      "height": 96,
+      "pixels": 5184,
+      "iterations": 100000,
+      "elapsed_ns": 1084174375,
+      "time_per_iter_us": 10.84174375,
+      "iter_per_sec": 92236.08517771876,
+      "megapixels_per_sec": 478.1518655612941
+    },
+    {
+      "name": "72x128",
+      "width": 72,
+      "height": 128,
+      "pixels": 9216,
+      "iterations": 100000,
+      "elapsed_ns": 1363209292,
+      "time_per_iter_us": 13.63209292,
+      "iter_per_sec": 73356.3074920707,
+      "megapixels_per_sec": 676.0517298469235
+    },
+    {
+      "name": "90x160",
+      "width": 90,
+      "height": 160,
+      "pixels": 14400,
+      "iterations": 100000,
+      "elapsed_ns": 1701213750,
+      "time_per_iter_us": 17.0121375,
+      "iter_per_sec": 58781.56110600446,
+      "megapixels_per_sec": 846.4544799264643
+    },
+    {
+      "name": "108x192",
+      "width": 108,
+      "height": 192,
+      "pixels": 20736,
+      "iterations": 100000,
+      "elapsed_ns": 2108236833,
+      "time_per_iter_us": 21.08236833,
+      "iter_per_sec": 47433.00109110655,
+      "megapixels_per_sec": 983.5707106251854
+    },
+    {
+      "name": "144x256",
+      "width": 144,
+      "height": 256,
+      "pixels": 36864,
+      "iterations": 100000,
+      "elapsed_ns": 3035085625,
+      "time_per_iter_us": 30.35085625,
+      "iter_per_sec": 32947.999613684704,
+      "megapixels_per_sec": 1214.595057758873
+    }
+  ]
+}

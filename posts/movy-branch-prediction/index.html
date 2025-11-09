@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>How Building a Terminal Graphics Engine Taught Me About CPU Branch Prediction</title>
+  <title>When “Optimized” Code Runs Slower</title>
   <link rel="stylesheet" href="article-style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 </head>
@@ -215,9 +215,8 @@ out_surface.color_map[idx_out] = .{
     .g = (old_color.g &amp; ~mask) | (new_color.g &amp; mask),
     .b = (old_color.b &amp; ~mask) | (new_color.b &amp; mask),
 };
-</code></pre><p>This one is also completely branchless — only bitwise logic.</p>
-<h4 id="strong-conditional-move-cmov-strong"><strong>Conditional Move (CMOV)</strong></h4>
-<p>This keeps an <code>if</code> in the source, but on modern CPUs, the compiler often emits a **conditional move (CMOV)**instruction.<br>That means the CPU executes both sides and conditionally commits the result — no pipeline stalls, no mispredictions.</p>
+</code></pre><h4 id="strong-conditional-move-cmov-strong"><strong>Conditional Move (CMOV)</strong></h4>
+<p>This keeps an <code>if</code> in the source, but on modern CPUs, the compiler often emits a <strong>conditional move (CMOV)</strong> instruction.<br>That means the CPU executes both sides and conditionally commits the result — no pipeline stalls, no mispredictions.</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">const</span> new_color = <span class="hljs-keyword">if</span> (out_surface.shadow_map[idx_out] == <span class="hljs-number">0</span>)
     surface_in.color_map[idx_in]
 <span class="hljs-keyword">else</span>

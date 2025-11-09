@@ -294,11 +294,8 @@ It’s about <strong>teaching them to behave predictably.</strong></p>
 <p>It turned out to be the same effect, just seen from the other side.  </p>
 <p>The alpha-blending versions weren’t faster because of math — they were faster because they <strong>did less guessing.</strong><br>They replaced an unpredictable “should I draw?” check with a predictable, always-executed blend.<br>In the <strong>small 3-surface case</strong>, the cost of misprediction outweighed the extra arithmetic, letting alpha win.<br>But as the scene grew, the predictor adapted, the mispredictions dropped, and the math cost took over again.<br><code>render()</code> reclaimed its lead.</p>
 <p>It wasn’t a bug.<br>It was a brief moment where <strong>prediction noise outweighed computation.</strong></p>
-<h3 id="the-vague-suspicion-confirmed">The Vague Suspicion Confirmed</h3>
-<p>Remember that vague suspicion I had earlier?<br>I was right — but I had no idea how far it reached. </p>
-<p>I knew mispredicted branches could hurt performance.<br>I didn’t expect them to <strong>dominate</strong> it — to the point where multiplying and dividing every pixel was cheaper than skipping some with a bad guess.<br>Seeing it that clearly in such a small loop was almost unsettling.</p>
 <h2 id="the-smoking-gun">The Smoking Gun</h2>
-<p>After dozens of runs, pattern after pattern, the evidence lined up perfectly.<br>The anomaly wasn’t random noise — it was a systematic interaction between <strong>two kinds of branches</strong>.</p>
+<p>After dozens of runs, pattern after pattern, the picture finally became clear.<br>The anomaly wasn’t random noise — it was a systematic interaction between <strong>two kinds of branches</strong>.</p>
 <p>When either bounds checking <em>or</em> occupancy checking was present alone, everything scaled normally.<br>Only when <strong>both</strong> existed in the same tight loop did performance invert.</p>
 <table>
 <thead>

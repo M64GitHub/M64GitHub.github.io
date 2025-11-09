@@ -66,7 +66,13 @@ And the full alpha blender — the one doing the <em>most</em> arithmetic — wa
 <p>It made no sense.
 So I pushed it further — more layers, more overlap.</p>
 <p><strong>10×10 sprites, 5 overlapping surfaces:</strong></p>
-<pre><code>render():              0.93 µs/iteration  (≈45% faster than before!)
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/chart-comparing-the-three-methods-for-10x10-sprites-with-5-overlapping-surfaces.png" alt="Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces<br><small>Place image at: arender/output/images/chart-comparing-the-three-methods-for-10x10-sprites-with-5-overlapping-surfaces.png</small></div>'">
+  </div>
+  <figcaption>Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces</figcaption>
+</figure>
+<pre><code>render():              0.93 µs/iteration  (45% faster than before!)
 renderWithAlphaToBg(): 2.09 µs/iteration  
 renderWithAlpha():     1.35 µs/iteration
 </code></pre><p>Now <code>render()</code> was not just faster — it was <em>45% faster</em> than on 3 surfaces, despite doing <em>more work.</em></p>

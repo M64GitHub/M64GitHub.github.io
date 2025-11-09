@@ -34,7 +34,7 @@
 <div class="article-byline">M. Schallner, 2025.11.09</div>
 <p><strong>What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.</strong></p>
 <h2 id="the-setup">The Setup</h2>
-<p>I’ve been building <strong>movy</strong>, a terminal graphics engine in <code>Zig</code> that turns pixel data into colorful ANSI escape sequences.</p>
+<p>I’ve been building <strong>movy</strong>, a terminal graphics engine in Zig that turns pixel data into colorful ANSI escape sequences.</p>
 <p>Its first renderer — <code>render()</code> — was simple and fast. Binary transparency only: a pixel was either there or it wasn’t. Clean, predictable, no math.</p>
 <p>But I wanted to go further. I wanted <strong>alpha blending</strong> — smooth transparency, soft fades, subtle light effects.</p>
 <p>So I added two new compositing paths:</p>

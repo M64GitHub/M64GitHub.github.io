@@ -3,15 +3,104 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="keywords" content="zig, performance, optimization, software engineering, systems programming">
   <title>M64's Blog</title>
+  <meta property="og:title" content="M64's Blog">
+  <meta property="og:description" content="Technical writing on zig, performance, optimization, and software engineering">
+  <meta property="og:image" content="https://m64github.github.io/posts/preview.png">
+  <link rel="stylesheet" href="card-minimal.css">
   <link rel="stylesheet" href="index-style.css">
+  <style>
+    .preview-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 40px 40px;
+    }
+
+    .preview-card {
+      background: transparent;
+      border: none;
+      padding: 30px 40px;
+      text-align: center;
+    }
+
+    .card-logo {
+      margin-bottom: 20px;
+      animation: logoPulse 3s ease-in-out infinite;
+    }
+
+    .card-logo img {
+      max-width: 300px;
+      width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      filter: drop-shadow(0 0 10px var(--neon-cyan));
+    }
+
+    .card-tagline {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      color: var(--neon-cyan);
+      text-shadow: 0 0 10px var(--neon-cyan);
+      letter-spacing: 6px;
+      font-weight: 600;
+      animation: textPulse 3s ease-in-out infinite;
+    }
+
+    .bullet {
+      color: var(--neon-magenta);
+      text-shadow: 0 0 15px var(--neon-magenta);
+      font-weight: 700;
+      animation: bulletPulse 3s ease-in-out infinite;
+      display: inline-block;
+    }
+
+    @keyframes logoPulse {
+      0%, 100% {
+        filter: drop-shadow(0 0 10px var(--neon-cyan));
+      }
+      50% {
+        filter: drop-shadow(0 0 25px var(--neon-magenta)) drop-shadow(0 0 40px var(--neon-purple));
+      }
+    }
+
+    @keyframes textPulse {
+      0%, 100% {
+        text-shadow: 0 0 10px var(--neon-cyan);
+        color: var(--neon-cyan);
+      }
+      50% {
+        text-shadow: 0 0 20px var(--neon-cyan), 0 0 30px var(--neon-magenta);
+        color: #4dffff;
+      }
+    }
+
+    @keyframes bulletPulse {
+      0%, 100% {
+        text-shadow: 0 0 15px var(--neon-magenta);
+        color: var(--neon-magenta);
+      }
+      50% {
+        text-shadow: 0 0 25px var(--neon-magenta), 0 0 35px var(--neon-purple);
+        color: #ff33ff;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="index-container">
-    <header class="index-header">
-      <h1>M64's Blog</h1>
-      <p class="subtitle">Technical writing on zig, performance, optimization, and software engineering</p>
-    </header>
+    <div class="preview-container">
+      <div class="preview-card">
+        <div class="card-logo">
+          <img src="m64logo-600.png" alt="M64">
+        </div>
+        <div class="card-tagline">
+          zig <span class="bullet">●</span> code <span class="bullet">●</span> pixels <span class="bullet">●</span> sound
+        </div>
+      </div>
+    </div>
 
     <div class="articles-list">
       <article class="article-card">

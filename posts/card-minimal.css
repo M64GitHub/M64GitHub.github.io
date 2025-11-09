@@ -1,0 +1,11 @@
+/* Minimal styles for animated preview card */
+/* Only includes what's needed - no conflicts with index-style.css */
+
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Neon colors for animated card */
+  --neon-cyan: #00f0ff;
+  --neon-magenta: #ff00ff;
+  --neon-purple: #b026ff;
+}

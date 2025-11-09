@@ -43,29 +43,7 @@ body {
 .index-container {
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: 60px 20px;
-}
-
-/* Header */
-.index-header {
-  text-align: center;
-  margin-bottom: 60px;
-}
-
-.index-header h1 {
-  font-size: 48px;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  margin-bottom: 16px;
-  letter-spacing: -0.5px;
-  text-shadow: 0 0 20px rgba(94, 201, 224, 0.3);
-}
-
-.index-header .subtitle {
-  font-size: 18px;
-  color: var(--text-secondary);
-  font-style: italic;
-  opacity: 0.8;
+  padding: 0 20px 60px;
 }
 
 /* Articles List */

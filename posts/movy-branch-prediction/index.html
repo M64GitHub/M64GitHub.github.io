@@ -80,8 +80,14 @@ renderWithAlphaToBg(): 2.09 µs/iteration
 renderWithAlpha():     1.35 µs/iteration
 </code></pre><p>Now <code>render()</code> was not just faster — it was <em>45% faster</em> than on 3 surfaces, despite doing <em>more work.</em></p>
 <p>At that point, I was staring at the terminal, wondering if I’d just broken physics.</p>
-<p>The benchmark data was undeniable — and completely irrational.
-I had a vague suspicion of what might be happening, but nothing that could fully explain a reversal this extreme.
+<p>The benchmark data was undeniable — and completely irrational.</p>
+<p>Two things stood out, both equally baffling:</p>
+<ol>
+<li>With <strong>three</strong> surfaces, the supposedly “fast” <code>render()</code> was the <em>slowest</em> of all — even slower than full alpha blending.</li>
+<li>Adding <strong>more</strong> surfaces — five instead of three — somehow made <code>render()</code> <em>faster.</em></li>
+</ol>
+<p>Both effects defied logic in different directions.</p>
+<p>I had a vague suspicion of what might be happening, but nothing that could fully explain a reversal this extreme.
 So I dug deeper.</p>
 <h2 id="the-investigation">The Investigation</h2>
 <p>The first step was obvious: look at the code.
@@ -159,7 +165,7 @@ It was <strong>control flow.</strong></p>
 renderOriginalClean() 5 surfaces: 0.95 µs
 </code></pre><p>The speedup was <strong>massive</strong>.<br>And more importantly — the <strong>anomaly vanished.</strong></p>
 <p>Three surfaces were now faster than five, exactly as expected.</p>
-<p>That meant the culprit wasn’t just the occupancy check.<br>The slowdown appeared only when <strong>bounds checking and occupancy checking coexisted.</strong></p>
+<p>That meant it wasn’t just about the occupancy check we’d isolated.<br>The reversal was gone, but the reason wasn’t yet clear.</p>
 <h3 id="strong-test-1-the-alpha-versions-strong"><strong>Test 1: The Alpha Versions</strong></h3>
 <p>Next, I cleaned up the alpha-blending versions the same way — removing bounds checks to see if they’d show the same effect.</p>
 <pre><code>renderWithAlphaClean()     3 surfaces: 0.87 µs
@@ -168,7 +174,8 @@ renderWithAlphaClean()     5 surfaces: 1.24 µs  (42% slower, as expected)
 renderWithAlphaToBgClean() 3 surfaces: 1.16 µs  
 renderWithAlphaToBgClean() 5 surfaces: 2.09 µs  (80% slower)
 </code></pre><p>Every alpha version scaled <em>normally</em>.<br>No reversal. No anomaly.<br>The pattern held: more surfaces → more time.</p>
-<p>So it wasn’t the blending math’s fault.<br>The problem was still somewhere in those <strong>branches.</strong></p>
+<p>That ruled out the blending math itself — it wasn’t the reason alpha blending had outperformed <code>render()</code> earlier.
+Whatever caused <strong>that</strong> first reversal between <code>render()</code> and the alpha versions was still hiding somewhere deeper in the control flow.</p>
 <h3 id="strong-test-2-the-branchless-experiment-strong"><strong>Test 2: The Branchless Experiment</strong></h3>
 <p>Maybe branches were the problem entirely.<br>So I made a version with <strong>no conditionals</strong> — it always wrote output, no decisions, no skipping.</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">const</span> occupied = out_surface.shadow_map[idx_out];
@@ -182,9 +189,12 @@ out_surface.color_map[idx_out] = .{
 </code></pre><p>Results:</p>
 <pre><code>renderNoBranchClean() 3 surfaces: 0.81 µs  (21% slower)
 renderNoBranchClean() 5 surfaces: 1.19 µs
-</code></pre><p>Going branchless <em>hurt performance.</em><br>The math-heavy version was slower than the conditional one.<br>Apparently, skipping work with <strong>well-behaved</strong> branches was still faster than doing everything unconditionally.</p>
+</code></pre><p>Going branchless <em>hurt performance.</em><br>The math-heavy version was slower than the conditional one.<br>Apparently, keeping <strong>some</strong> branches was still faster than removing them entirely.</p>
+<p>That hinted that the issue wasn’t the presence of branches, but <strong>how</strong> they behaved.</p>
+<p>If removing them entirely didn’t help, maybe the real key was <strong>regularity</strong> — how predictable each branch outcome was from one pixel to the next.
+That led to the next experiment.</p>
 <h3 id="strong-test-3-perfect-prediction-strong"><strong>Test 3: Perfect Prediction</strong></h3>
-<p>So what if I made the branches behave well, and <strong>perfectly predictable</strong>?</p>
+<p>If irregular branch outcomes were to blame, what would happen if I made them <strong>perfectly predictable</strong>?</p>
 <p>I rewrote the loop to write in a checkerboard pattern — half predictable, half skipped:</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">if</span> ((x + y) % <span class="hljs-number">2</span> == <span class="hljs-number">0</span>) {
     out_surface.color_map[idx_out] = surface_in.color_map[idx_in];

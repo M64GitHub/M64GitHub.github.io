@@ -32,7 +32,7 @@
 
 		<main class="article-content">
 			<h1 id="when-optimized-code-runs-slower">When “Optimized” Code Runs Slower</h1>
-			<div class="article-byline">M64, 2025.11.09</div>
+			<div class="article-byline">M. Schallner, 2025.11.09</div>
 			<p><strong>What a terminal renderer taught me about branch prediction, CPU pipelines, and the
 					beauty of being wrong.</strong></p>
 			<h2 id="the-setup">The Setup</h2>
@@ -214,7 +214,8 @@
 					vanished.</strong></p>
 			<p>Three surfaces were now faster than five, exactly as expected.</p>
 			<p>That meant the culprit wasn’t just the occupancy check.<br>The slowdown appeared only when
-				<strong>bounds checking and occupancy checking coexisted.</strong></p>
+				<strong>bounds checking and occupancy checking coexisted.</strong>
+			</p>
 			<h3 id="strong-test-1-the-alpha-versions-strong"><strong>Test 1: The Alpha Versions</strong>
 			</h3>
 			<p>Next, I cleaned up the alpha-blending versions the same way — removing bounds checks to see
@@ -228,7 +229,8 @@
 			<p>Every alpha version scaled <em>normally</em>.<br>No reversal. No anomaly.<br>The pattern
 				held: more surfaces → more time.</p>
 			<p>So it wasn’t the blending math’s fault.<br>The problem was still somewhere in those
-				<strong>branches.</strong></p>
+				<strong>branches.</strong>
+			</p>
 			<h3 id="strong-test-2-the-branchless-experiment-strong"><strong>Test 2: The Branchless
 					Experiment</strong></h3>
 			<p>Maybe branches were the problem entirely.<br>So I made a version with <strong>no
@@ -362,7 +364,8 @@
 				Their Interaction</h3>
 			<p>In <code>render()</code>, there aren’t just one or two branches.<br>There are
 				<strong>three</strong>, stacked in tight loops:<br>bounds checking, transparency
-				checking, and occupancy checking.</p>
+				checking, and occupancy checking.
+			</p>
 			<p>Each of them on its own is predictable.<br>But together, they form overlapping, irregular
 				patterns — especially when multiple surfaces overlap in semi-repeating ways.</p>
 			<figure class="article-image">
@@ -398,7 +401,8 @@
 			<p>The alpha-blending versions weren’t faster because of math.<br>They were faster because they
 				<strong>did less guessing</strong>.<br>They replaced one unpredictable branch with a
 				predictable, always-executed computation — and in the <strong>small 3-surface
-					case</strong>, that predictability outweighed the cost of extra arithmetic.</p>
+					case</strong>, that predictability outweighed the cost of extra arithmetic.
+			</p>
 			<p>But as the scene grew — more surfaces, more pixels, more work — the balance shifted back.
 				Once the CPU’s branch predictor had enough repetition to learn the patterns, the
 				arithmetic overhead started to dominate again, and <code>render()</code> reclaimed its
@@ -412,7 +416,8 @@
 				dramatic the effect could be.</p>
 			<p>I knew that mispredicted branches hurt performance, but I didn’t expect them to
 				<strong>dwarf</strong> the cost of entire blending operations.<br>Seeing it this clearly
-				in such a small loop was almost unsettling.</p>
+				in such a small loop was almost unsettling.
+			</p>
 			<h2 id="the-smoking-gun">The Smoking Gun</h2>
 			<p>After dozens of runs, pattern after pattern, the evidence lined up perfectly.<br>The anomaly
 				wasn’t random noise — it was a systematic interaction between <strong>two kinds of
@@ -476,7 +481,8 @@
 					math cost and branching returned to normal.</li>
 			</ul>
 			<p>In short:<br>The slowdown wasn’t caused by bad math or bad code.<br>It was caused by
-				<strong>two perfectly correct branches colliding in unpredictable ways</strong>.</p>
+				<strong>two perfectly correct branches colliding in unpredictable ways</strong>.
+			</p>
 			<h2 id="lessons-learned">Lessons Learned</h2>
 			<p>This investigation taught me several counterintuitive truths:</p>
 			<h3 id="0-profile-don-39-t-assume">0. Profile, Don&#39;t Assume</h3>

@@ -56,7 +56,7 @@
 <code>render()</code> should dominate. It does no math, no blending — just copies pixels.
 <code>renderWithAlpha()</code> and <code>renderWithAlphaToBg()</code> both do more work, so they should be 2–3× slower.</p>
 <p>That’s what the benchmark was supposed to confirm.</p>
-<p>Instead, it flipped the laws of logic.</p>
+<p>Instead, the data completely contradicted what I expected.</p>
 <p><strong>10×10 sprites, 3 overlapping surfaces:</strong></p>
 <pre><code>render():              1.70 µs/iteration  (SLOWEST)
 renderWithAlphaToBg(): 1.16 µs/iteration  (32% faster)
@@ -64,8 +64,7 @@ renderWithAlpha():     0.85 µs/iteration  (2× faster!)
 </code></pre><p>The “fast path” was the slowest.
 The “optimized” one lost to the “unoptimized” one.
 And the full alpha blender — the one doing the <em>most</em> arithmetic — was the fastest of all.</p>
-<p>It made no sense.
-So I pushed it further — more layers, more overlap.</p>
+<p>This outcome didn’t make sense logically.<br>To investigate, I extended the test — more layers, more overlap.</p>
 <p><strong>10×10 sprites, 5 overlapping surfaces:</strong></p>
 <figure class="article-image">
   <div class="image-placeholder">
@@ -76,20 +75,16 @@ So I pushed it further — more layers, more overlap.</p>
 <pre><code>render():              0.93 µs/iteration  (45% faster than before!)
 renderWithAlphaToBg(): 2.09 µs/iteration  
 renderWithAlpha():     1.35 µs/iteration
-</code></pre><p>Now <code>render()</code> was not just faster — it was <em>45% faster</em> than on 3 surfaces, despite doing <em>more work.</em></p>
+</code></pre><p>Now <code>render()</code> was not just faster — with <em>5 surfaces</em> it was in total also <em>45% faster</em> than it was on 3 surfaces, despite doing <em>more work.</em></p>
 <p>At that point, I was staring at the terminal, wondering if I’d just broken physics.</p>
-<p>The benchmark data was undeniable — and completely irrational.</p>
+<p>This benchmark data was undeniable — and completely irrational.</p>
 <p>Two things stood out, both equally baffling:</p>
 <ol>
 <li>With <strong>three</strong> surfaces, the supposedly “fast” <code>render()</code> was the <em>slowest</em> of all — even slower than full alpha blending.</li>
 <li>Adding <strong>more</strong> surfaces — five instead of three — somehow made <code>render()</code> <em>faster.</em></li>
 </ol>
-<p>Both effects defied logic in different directions.</p>
-<p>I had a vague suspicion of what might be happening, but nothing that could fully explain a reversal this extreme.
-So I dug deeper.</p>
+<p>Clearly, something in my “fast path” wasn’t behaving as expected. To understand the cause, I examined the code more closely.</p>
 <h2 id="the-investigation">The Investigation</h2>
-<p>The first step was obvious: look at the code.
-If the benchmark wasn’t lying, maybe my “fast path” wasn’t so fast after all.</p>
 <p>Here’s the core of <code>render()</code> — the original, binary transparency path (simplified):</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">for</span> (surfaces) |surface| {
     <span class="hljs-keyword">for</span> (each_pixel_in_surface) |_| {
@@ -107,8 +102,7 @@ If the benchmark wasn’t lying, maybe my “fast path” wasn’t so fast after
         }
     }
 }
-</code></pre><p>Simple logic, right?
-But there’s a pattern here — <strong>three distinct types of conditional checks:</strong></p>
+</code></pre><p>At first glance, the logic seems straightforward.<br>But there’s a pattern here — <strong>three distinct types of conditional checks:</strong></p>
 <ol>
 <li><strong>Bounds checking:</strong> is the pixel inside the output surface?</li>
 <li><strong>Transparency check:</strong> is the source pixel visible?</li>

@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta property="og:image" content="https://m64github.github.io/posts/movy-branch-prediction/images/preview.png">
-<meta property="og:title" content="When “Optimized” Code Runs Slower">
-<meta property="og:description" content="What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>When “Optimized” Code Runs Slower</title>
@@ -92,17 +89,15 @@ So I dug deeper.</p>
 <h2 id="the-investigation">The Investigation</h2>
 <p>The first step was obvious: look at the code.
 If the benchmark wasn’t lying, maybe my “fast path” wasn’t so fast after all.</p>
-<p>Here’s the core of <code>render()</code> — the original, binary transparency path:</p>
+<p>Here’s the core of <code>render()</code> — the original, binary transparency path (simplified):</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">for</span> (surfaces) |surface| {
-    <span class="hljs-keyword">for</span> (each_pixel_in_surface) |pixel| {
+    <span class="hljs-keyword">for</span> (each_pixel_in_surface) |_| {
         <span class="hljs-comment">// Bounds checking</span>
         <span class="hljs-keyword">if</span> (out_y &lt; <span class="hljs-number">0</span> or out_y &gt;= height) <span class="hljs-keyword">continue</span>;
         <span class="hljs-keyword">if</span> (out_x &lt; <span class="hljs-number">0</span> or out_x &gt;= width) <span class="hljs-keyword">continue</span>;
         
         <span class="hljs-comment">// Skip transparent pixels</span>
-        <span class="hljs-keyword">if</span> (surface.shadow_map[pixel] == <span class="hljs-number">0</span>) <span class="hljs-keyword">continue</span>;
-
-        <span class="hljs-keyword">const</span> idx_out = calculate_output_position(pixel);
+        <span class="hljs-keyword">if</span> (surface.shadow_map[idx_in] == <span class="hljs-number">0</span>) <span class="hljs-keyword">continue</span>;
 
         <span class="hljs-comment">// Only write if destination is not already occupied</span>
         <span class="hljs-keyword">if</span> (out_surface.shadow_map[idx_out] != <span class="hljs-number">1</span>) {
@@ -120,19 +115,17 @@ But there’s a pattern here — <strong>three distinct types of conditional che
 </ol>
 <p>The alpha-blending version looked similar, but with one crucial difference:</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">for</span> (surfaces) |surface| {
-    <span class="hljs-keyword">for</span> (each_pixel_in_surface) |pixel| {
+    <span class="hljs-keyword">for</span> (each_pixel_in_surface) |_| {
         <span class="hljs-comment">// Bounds checking</span>
         <span class="hljs-keyword">if</span> (out_x &lt; <span class="hljs-number">0</span> or out_x &gt;= width) <span class="hljs-keyword">continue</span>;
         <span class="hljs-keyword">if</span> (out_y &lt; <span class="hljs-number">0</span> or out_y &gt;= height) <span class="hljs-keyword">continue</span>;
 
         <span class="hljs-comment">// Skip transparent pixels</span>
-        <span class="hljs-keyword">if</span> (surface.shadow_map[pixel] == <span class="hljs-number">0</span>) <span class="hljs-keyword">continue</span>;
-
-        <span class="hljs-keyword">const</span> idx_out = calculate_output_position(pixel);
+        <span class="hljs-keyword">if</span> (surface.shadow_map[idx_in] == <span class="hljs-number">0</span>) <span class="hljs-keyword">continue</span>;
 
         <span class="hljs-comment">// Always blend — no occupancy check</span>
         <span class="hljs-keyword">const</span> blended = blend_colors(
-            surface.color_map[pixel],
+            surface.color_map[idx_in],
             out_surface.color_map[idx_out]
         );
         out_surface.color_map[idx_out] = blended;

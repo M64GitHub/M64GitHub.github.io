@@ -4,8 +4,6 @@
 <meta property="og:image" content="https://m64github.github.io/posts/movy-branch-prediction/images/preview.png">
 <meta property="og:title" content="When “Optimized” Code Runs Slower">
 <meta property="og:description" content="What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.">
-
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>When “Optimized” Code Runs Slower</title>
@@ -145,7 +143,7 @@ It was <strong>control flow.</strong></p>
 <p>So if the problem was control flow, which part of it?</p>
 <p>The only way to know was to strip everything down and start testing piece by piece.</p>
 <h3 id="strong-test-0-strip-away-the-noise-strong"><strong>Test 0: Strip Away the Noise</strong></h3>
-<p>The first suspect was the obvious one: <strong>bounds checking.</strong><br>I knew my test sprites were always fully inside the output surface, so those checks shouldn’t matter.</p>
+<p>The first suspect was the obvious one: <strong>bounds checking.</strong><br>For my test setup I knew my test sprites were always fully inside the output surface, so those checks shouldn’t matter.</p>
 <p>So I created a clean variant — same logic, minus the boundary guards:</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">for</span> (<span class="hljs-number">0.</span>.surface.h) |y| {
     <span class="hljs-keyword">for</span> (<span class="hljs-number">0.</span>.surface.w) |x| {

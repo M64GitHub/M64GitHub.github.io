@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta property="og:image" content="https://m64github.github.io/posts/movy-branch-prediction/images/preview.png">
-<meta property="og:title" content="When “Optimized” Code Runs Slower">
-<meta property="og:description" content="What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="keywords" content="zig, performance, branch-prediction, rendering">
   <title>When “Optimized” Code Runs Slower</title>
-  <link rel="stylesheet" href="article-style.css">
+  <meta property="og:image" content="https://m64github.github.io/posts/when-optimized-code-runs-slower/images/preview.png">
+  <meta property="og:title" content="When “Optimized” Code Runs Slower">
+  <meta property="og:description" content="What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.">
+  <link rel="stylesheet" href="../article-style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 </head>
 <body>
@@ -28,9 +29,12 @@
     </aside>
 
     <main class="article-content">
-      <h1 id="when-optimized-code-runs-slower">When “Optimized” Code Runs Slower</h1>
-<div class="article-byline">M. Schallner, 2025.11.09</div>
+      <div class="article-tags">
+    <span class="tag">#zig</span> <span class="tag">#performance</span> <span class="tag">#branch-prediction</span> <span class="tag">#rendering</span>
+  </div>
+<h1 id="when-optimized-code-runs-slower">When “Optimized” Code Runs Slower</h1>
 <p><strong>What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.</strong></p>
+<div class="article-byline">M. Schallner, 2025.11.09</div>
 <h2 id="the-setup">The Setup</h2>
 <p>I’ve been building <strong>movy</strong>, a terminal graphics engine in Zig that turns pixel data into colorful ANSI escape sequences.</p>
 <p>Its first renderer — <code>render()</code> — was simple and fast. Binary transparency only: a pixel was either there or it wasn’t. Clean, predictable, no math.</p>
@@ -47,7 +51,7 @@
 <h2 id="the-anomaly">The Anomaly</h2>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/chart-comparing-the-three-methods-for-10x10-sprites-with-3-overlapping-surfaces.png" alt="Chart comparing the three methods for 10x10 sprites with 3 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods for 10x10 sprites with 3 overlapping surfaces<br><small>Place image at: arender/output/images/chart-comparing-the-three-methods-for-10x10-sprites-with-3-overlapping-surfaces.png</small></div>'">
+    <img src="images/chart-comparing-the-three-methods-for-10x10-sprites-with-3-overlapping-surfaces.png" alt="Chart comparing the three methods for 10x10 sprites with 3 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods for 10x10 sprites with 3 overlapping surfaces<br><small>Place image at: arender/output/when-optimized-code-runs-slower/images/chart-comparing-the-three-methods-for-10x10-sprites-with-3-overlapping-surfaces.png</small></div>'">
   </div>
   <figcaption>Chart comparing the three methods for 10x10 sprites with 3 overlapping surfaces</figcaption>
 </figure>
@@ -67,7 +71,7 @@ And the full alpha blender — the one doing the <em>most</em> arithmetic — wa
 <p><strong>10×10 sprites, 5 overlapping surfaces:</strong></p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/chart-comparing-the-three-methods-for-10x10-sprites-with-5-overlapping-surfaces.png" alt="Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces<br><small>Place image at: arender/output/images/chart-comparing-the-three-methods-for-10x10-sprites-with-5-overlapping-surfaces.png</small></div>'">
+    <img src="images/chart-comparing-the-three-methods-for-10x10-sprites-with-5-overlapping-surfaces.png" alt="Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces<br><small>Place image at: arender/output/when-optimized-code-runs-slower/images/chart-comparing-the-three-methods-for-10x10-sprites-with-5-overlapping-surfaces.png</small></div>'">
   </div>
   <figcaption>Chart comparing the three methods for 10x10 sprites with 5 overlapping surfaces</figcaption>
 </figure>
@@ -188,7 +192,7 @@ renderPredictablePatternClean() 5 surfaces: 0.67 µs
 <p>The mystery finally made sense — the anomalies all pointed to <strong>branch prediction.</strong></p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/chart-comparing-the-three-methods-accross-sprite-sizes-with-3-overlapping-surfaces.png" alt="Chart comparing the three methods accross sprite sizes with 3 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods accross sprite sizes with 3 overlapping surfaces<br><small>Place image at: arender/output/images/chart-comparing-the-three-methods-accross-sprite-sizes-with-3-overlapping-surfaces.png</small></div>'">
+    <img src="images/chart-comparing-the-three-methods-accross-sprite-sizes-with-3-overlapping-surfaces.png" alt="Chart comparing the three methods accross sprite sizes with 3 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Chart comparing the three methods accross sprite sizes with 3 overlapping surfaces<br><small>Place image at: arender/output/when-optimized-code-runs-slower/images/chart-comparing-the-three-methods-accross-sprite-sizes-with-3-overlapping-surfaces.png</small></div>'">
   </div>
   <figcaption>Chart comparing the three methods accross sprite sizes with 3 overlapping surfaces</figcaption>
 </figure>
@@ -220,7 +224,7 @@ out_surface.color_map[idx_out] = new_color;
 </code></pre><p>Then I benchmarked both against all previous “clean” variants.</p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/performance-overhead-relative-to-baseline-render-3-overlapping-surfaces.png" alt="Performance overhead relative to baseline render - 3 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Performance overhead relative to baseline render - 3 overlapping surfaces<br><small>Place image at: arender/output/images/performance-overhead-relative-to-baseline-render-3-overlapping-surfaces.png</small></div>'">
+    <img src="images/performance-overhead-relative-to-baseline-render-3-overlapping-surfaces.png" alt="Performance overhead relative to baseline render - 3 overlapping surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Performance overhead relative to baseline render - 3 overlapping surfaces<br><small>Place image at: arender/output/when-optimized-code-runs-slower/images/performance-overhead-relative-to-baseline-render-3-overlapping-surfaces.png</small></div>'">
   </div>
   <figcaption>Performance overhead relative to baseline render - 3 overlapping surfaces</figcaption>
 </figure>
@@ -244,7 +248,7 @@ If the guess is right, everything continues at full speed.<br>If it’s wrong, t
 <p>Each one by itself is predictable.<br>But together, they form overlapping, irregular patterns — especially when multiple surfaces overlap in semi-repeating ways.</p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/test-positioning-and-order-of-3-surfaces.png" alt="Test positioning and order of 3 surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Test positioning and order of 3 surfaces<br><small>Place image at: arender/output/images/test-positioning-and-order-of-3-surfaces.png</small></div>'">
+    <img src="images/test-positioning-and-order-of-3-surfaces.png" alt="Test positioning and order of 3 surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Test positioning and order of 3 surfaces<br><small>Place image at: arender/output/when-optimized-code-runs-slower/images/test-positioning-and-order-of-3-surfaces.png</small></div>'">
   </div>
   <figcaption>Test positioning and order of 3 surfaces</figcaption>
 </figure>
@@ -257,7 +261,7 @@ If the guess is right, everything continues at full speed.<br>If it’s wrong, t
 <p>So roughly one-third of the time the branch saw a “fully empty” region, and two-thirds of the time it saw overlap — a <strong>33 / 66 %</strong> rhythm that alternated frequently.</p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/test-positioning-and-order-of-5-surfaces.png" alt="Test positioning and order of 5 surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Test positioning and order of 5 surfaces<br><small>Place image at: arender/output/images/test-positioning-and-order-of-5-surfaces.png</small></div>'">
+    <img src="images/test-positioning-and-order-of-5-surfaces.png" alt="Test positioning and order of 5 surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Test positioning and order of 5 surfaces<br><small>Place image at: arender/output/when-optimized-code-runs-slower/images/test-positioning-and-order-of-5-surfaces.png</small></div>'">
   </div>
   <figcaption>Test positioning and order of 5 surfaces</figcaption>
 </figure>

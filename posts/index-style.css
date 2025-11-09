@@ -1,0 +1,260 @@
+/* Blog Index - Dark Synthwave Style */
+
+:root {
+  /* Base colors */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #0d1117;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a8a8a8;
+
+  /* Synthwave accents */
+  --accent-cyan: #5ec9e0;
+  --accent-magenta: #c77dbb;
+  --accent-purple: #8a7db8;
+  --accent-yellow: #f0c969;
+
+  /* UI elements */
+  --border-color: #2d2d2d;
+  --card-bg: #0d1117;
+  --card-hover-bg: #161b22;
+
+  /* Spacing */
+  --content-width: 1000px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Container */
+.index-container {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 60px 20px;
+}
+
+/* Header */
+.index-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.index-header h1 {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+  text-shadow: 0 0 20px rgba(94, 201, 224, 0.3);
+}
+
+.index-header .subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* Articles List */
+.articles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Article Card */
+.article-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.article-card:hover {
+  background: var(--card-hover-bg);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 4px 20px rgba(94, 201, 224, 0.15);
+  transform: translateY(-2px);
+}
+
+.card-link {
+  display: flex;
+  flex-direction: row;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Card Image */
+.card-image {
+  flex-shrink: 0;
+  width: 300px;
+  height: 200px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.article-card:hover .card-image img {
+  transform: scale(1.05);
+}
+
+/* Card Content */
+.card-content {
+  flex: 1;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.card-title {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  margin: 0;
+  line-height: 1.3;
+  transition: text-shadow 0.3s ease;
+  flex: 1;
+}
+
+.article-card:hover .card-title {
+  text-shadow: 0 0 12px rgba(94, 201, 224, 0.3);
+}
+
+.card-date {
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  font-weight: 400;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+/* Card Tags */
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.card-tags .tag {
+  display: inline-block;
+  color: var(--accent-yellow);
+  font-size: 12px;
+  font-weight: 500;
+  text-shadow: 0 0 12px rgba(240, 201, 105, 0.4);
+  transition: text-shadow 0.2s ease;
+}
+
+.article-card:hover .card-tags .tag {
+  text-shadow: 0 0 16px rgba(240, 201, 105, 0.6);
+}
+
+/* Card Description */
+.card-description {
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .index-container {
+    padding: 40px 16px;
+  }
+
+  .index-header h1 {
+    font-size: 36px;
+  }
+
+  .index-header .subtitle {
+    font-size: 16px;
+  }
+
+  .articles-list {
+    gap: 24px;
+  }
+
+  /* Stack cards vertically on mobile */
+  .card-link {
+    flex-direction: column;
+  }
+
+  .card-image {
+    width: 100%;
+    height: 180px;
+  }
+
+  .card-content {
+    padding: 20px;
+  }
+
+  .card-title {
+    font-size: 22px;
+  }
+
+  .card-date {
+    font-size: 12px;
+  }
+
+  .card-description {
+    font-size: 15px;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+
+  .article-card {
+    border: 1px solid #ddd;
+    page-break-inside: avoid;
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection */
+::selection {
+  background: rgba(94, 201, 224, 0.3);
+  color: var(--text-primary);
+}

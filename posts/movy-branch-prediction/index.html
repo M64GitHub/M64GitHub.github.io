@@ -126,13 +126,13 @@ renderWithAlpha():     1.35 µs/iteration
     }
 }
 </code></pre><p>The alpha version performs <strong>more work per pixel</strong> — multiplications and divisions — yet it contains <strong>fewer branches.</strong><br>It always blends, without any final “should I draw?” decision.</p>
-<p>That difference stood out.</p>
-<p>It suggested that the additional conditionals might have been more costly than the arithmetic itself.<br>I wasn’t ready to draw conclusions yet, but the hypothesis aligned too well to ignore.</p>
+<p>That difference stood out.
+It suggested that the extra conditionals might be costing more than the arithmetic itself.<br>I wasn’t ready to draw conclusions yet, but the hypothesis fit the data too well to ignore.</p>
 <p>If that was true, the problem wasn’t arithmetic — it was <strong>control flow.</strong></p>
 <h2 id="the-experiments">The Experiments</h2>
 <p>I decided to strip the renderer down and test each factor in isolation.</p>
 <h3 id="strong-test-0-strip-away-the-noise-strong"><strong>Test 0: Strip Away the Noise</strong></h3>
-<p>The first suspect was the obvious one: <strong>bounds checking.</strong><br>In my setup, the sprites were always fully inside the output surface, so those checks shouldn’t matter.</p>
+<p>The goal was to isolate what might be causing the slowdown — especially the occupancy check — by removing anything nonessential.<br>Since my test sprites were always fully inside the output surface, I started by removing the bounds checks to keep only the core logic.</p>
 <p>So I created a clean variant — same logic, minus the boundary guards:</p>
 <pre><code class="hljs language-zig"><span class="hljs-keyword">for</span> (<span class="hljs-number">0.</span>.surface.h) |y| {
     <span class="hljs-keyword">for</span> (<span class="hljs-number">0.</span>.surface.w) |x| {
@@ -159,8 +159,6 @@ renderWithAlphaToBgClean() 5 surfaces: 2.09 µs  (80% slower)
 </code></pre><p>Every alpha version scaled <em>normally</em>.<br>No reversal. No anomaly.<br>The pattern held: more surfaces → more time.</p>
 <p>That ruled out the blending math itself — it wasn’t the reason alpha blending had outperformed <code>render()</code> earlier.
 Whatever caused <strong>that</strong> first reversal between <code>render()</code> and the alpha versions was still hiding somewhere deeper in the control flow.</p>
-<p>With arithmetic eliminated, the next logical step was to isolate the branches themselves.
-If branching really was the culprit, removing it entirely should reveal the cost.</p>
 <h3 id="strong-test-2-the-branchless-experiment-strong"><strong>Test 2: The Branchless Experiment</strong></h3>
 <p>Having seen improvement from fewer branches, the next step was to quantify the effect of removing them entirely.</p>
 <p>So I made a version with <strong>no conditionals</strong> — it always wrote output, no decisions, no skipping.</p>

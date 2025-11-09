@@ -22,7 +22,6 @@
   <li ><a href="#the-experiments">The Experiments</a></li>
   <li ><a href="#branch-prediction-the-hidden-performance-killer">Branch Prediction: The Hidden Performance Killer</a></li>
   <li ><a href="#the-smoking-gun">The Smoking Gun</a></li>
-  <li ><a href="#lessons-learned">Lessons Learned</a></li>
   <li ><a href="#conclusion">Conclusion</a></li>
 </ul>
 </nav>
@@ -352,18 +351,6 @@ It’s about <strong>teaching them to behave predictably.</strong></p>
 <li>Once the predictor stabilized at higher iteration counts, the relationship between math cost and branching returned to normal.</li>
 </ul>
 <p>In short:<br>The slowdown wasn’t caused by bad math or bad code.<br>It was caused by <strong>two perfectly correct branches colliding in unpredictable ways</strong>.</p>
-<h2 id="lessons-learned">Lessons Learned</h2>
-<p>This investigation taught me several counterintuitive truths:</p>
-<h3 id="0-profile-don-39-t-assume">0. Profile, Don&#39;t Assume</h3>
-<p>My &quot;optimized&quot; early-exit path was slower in some cases. The only way to know is to measure. Assumptions about performance are often wrong, especially when they ignore CPU microarchitecture.</p>
-<h3 id="1-branch-interaction-is-context-dependent">1. Branch Interaction is Context-Dependent</h3>
-<p>The combination of bounds checking (at different loop levels) with occupancy checking (in the innermost loop) creates destructive interference—but only at certain scales. We can&#39;t simply count branches; we need to understand how they interact based on their position in the code and the patterns they create.</p>
-<h3 id="2-branchless-isn-39-t-free">2. Branchless Isn&#39;t Free</h3>
-<p>Modern branch predictors are so good that avoiding branches often costs more than occasional mispredictions. Measure before eliminating branches.</p>
-<h3 id="3-you-can-39-t-always-fix-it">3. You Can&#39;t Always Fix It</h3>
-<p>Bounds checking in my case is mandatory in production code. Sometimes you have to live with the performance anomaly. But you can choose algorithms with fewer total branches to minimize the impact.</p>
-<h3 id="4-profile-everything">4. Profile Everything</h3>
-<p>When you <em>do</em> measure, don’t stop at one data point.<br>I only found this by measuring at different scales. Testing only one size would have missed the entire story.</p>
 <h2 id="conclusion">Conclusion</h2>
 <p>I set out to speed up a renderer and ended up profiling the branch predictor.</p>
 <p>What I first took for a measurement artifact turned out to be a hardware effect: two valid conditions creating destructive interference in the prediction cache.

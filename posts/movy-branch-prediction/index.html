@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta property="og:image" content="https://m64github.github.io/posts/movy-branch-prediction/images/preview.png">
+meta property="og:image" content="https://m64github.github.io/posts/movy-branch-prediction/images/preview.png">
 <meta property="og:title" content="When “Optimized” Code Runs Slower">
 <meta property="og:description" content="What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.">
   <meta charset="UTF-8">
@@ -254,42 +254,48 @@ out_surface.color_map[idx_out] = new_color;
 It’s not about removing branches.
 It’s about <strong>teaching them to behave predictably.</strong></p>
 <h2 id="branch-prediction-the-hidden-performance-killer">Branch Prediction: The Hidden Performance Killer</h2>
-<p>Modern CPUs don’t just execute instructions — they <strong>predict</strong> the future.
-Every conditional branch (<code>if</code>, <code>while</code>, <code>for</code>, etc.) is a question the CPU must answer <em>before</em> it knows the result. Waiting for that answer would stall the instruction pipeline, wasting cycles.</p>
-<p>To keep things fast, processors use <strong>branch predictors</strong>: small pieces of hardware that guess which path the code will take based on recent history.<br>If the guess is right, execution continues at full speed.<br>If it’s wrong, the pipeline must be flushed, and all the speculative work discarded — a <strong>branch misprediction</strong>.</p>
-<p>On modern architectures, that costs roughly <strong>15–20 CPU cycles per miss</strong> — an eternity when it happens millions of times per frame.</p>
-<h3 id="the-problem-isn-t-one-branch-it-s-their-interaction">The Problem Isn’t One Branch — It’s Their Interaction</h3>
-<p>In <code>render()</code>, there aren’t just one or two branches.<br>There are <strong>three</strong>, stacked in tight loops:<br>bounds checking, transparency checking, and occupancy checking.</p>
-<p>Each of them on its own is predictable.<br>But together, they form overlapping, irregular patterns — especially when multiple surfaces overlap in semi-repeating ways.</p>
+<p>After the final test, the pattern was undeniable:<br>the slowdown wasn’t arithmetic at all — it was <strong>prediction</strong>.</p>
+<p>The next question was <em>why</em> it behaved so differently:<br>Why was <code>render()</code> slower with 3 surfaces but faster with 5?<br>And why had alpha blending — with all its extra math — beaten the “fast path” at small scales?</p>
+<p>To answer that, we have to look not at the code, but at the CPU itself.</p>
+<p>Modern CPUs don’t just execute instructions — they <strong>predict</strong> them.<br>Every conditional branch (<code>if</code>, <code>while</code>, <code>for</code>, etc.) forces the CPU to guess which way the code will go <em>before</em> it knows the result.<br>Waiting would stall the pipeline, so the processor speculates and runs ahead.<br>If it guesses right, it keeps flying.<br>If it guesses wrong, it must throw away everything it did — a <strong>branch misprediction</strong>.</p>
+<p>On modern chips, that penalty is brutal: roughly <strong>15–20 cycles per miss</strong>, multiplied by millions of iterations.</p>
+<h3 id="the-problem-isn-t-a-single-branch-it-s-how-they-interact">The Problem Isn’t a Single Branch — It’s How They Interact</h3>
+<p>In <code>render()</code>, there aren’t just one or two branches.<br>There are <strong>three</strong>, stacked tightly inside the hot loop:<br>bounds checking, transparency checking, and occupancy checking.</p>
+<p>Each of them on its own is predictable.<br>But together, they produce irregular patterns — especially when surfaces overlap in semi-repeating ways.</p>
 <figure class="article-image">
   <div class="image-placeholder">
     <img src="images/test-positioning-and-order-of-3-surfaces.png" alt="Test positioning and order of 3 surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Test positioning and order of 3 surfaces<br><small>Place image at: arender/output/images/test-positioning-and-order-of-3-surfaces.png</small></div>'">
   </div>
   <figcaption>Test positioning and order of 3 surfaces</figcaption>
 </figure>
-<figure class="article-image">
-  <div class="image-placeholder">
-    <img src="images/test-positioning-and-order-of-5-surfaces.png" alt="Test positioning and order of 5 surfaces" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Test positioning and order of 5 surfaces<br><small>Place image at: arender/output/images/test-positioning-and-order-of-5-surfaces.png</small></div>'">
-  </div>
-  <figcaption>Test positioning and order of 5 surfaces</figcaption>
-</figure>
-<p>When the CPU’s predictor learns that a condition is “usually true,” it speculates that way next time.<br>But if the pattern changes — say, a new surface overlaps differently — the predictor is suddenly wrong.<br>And every misprediction costs cycles.</p>
-<p>That’s why the results flipped so strangely:</p>
+<p><strong>With three surfaces:</strong></p>
 <ul>
-<li>With <strong>3 surfaces</strong>, the overlap pattern changed often — confusing the predictor.</li>
-<li>With <strong>5 surfaces</strong>, the pattern repeated more regularly — allowing the predictor to learn.</li>
+<li>Surface 2: 100 % of pixels visible (nothing drawn yet)</li>
+<li>Surface 1: 75 % visible</li>
+<li>Surface 0: 75 % visible</li>
 </ul>
-<p>The result?
-The same function ran <em>45% faster</em> with <em>more work</em> simply because its branch patterns became more predictable.</p>
+<p>So about one-third of the time the branch saw a “fully empty” region and two-thirds of the time it saw overlap — a <strong>33 / 66 %</strong> rhythm that alternated frequently.</p>
+<p><strong>With five surfaces:</strong></p>
+<ul>
+<li>Surface 4: 100 % visible</li>
+<li>Surfaces 3 → 0: ≈ 75 % visible each</li>
+</ul>
+<p>Here, the predictor encountered a much steadier <strong>20 / 80 %</strong> pattern, repeating less often.<br>The overall workload was higher, but the branch outcomes were more regular — exactly the kind of consistency that makes a predictor happy.</p>
+<p>When the predictor learns that a condition is “usually true,” it speculates accordingly.<br>But if the pattern shifts — say, a new surface overlaps differently — it suddenly mispredicts, stalling the pipeline.</p>
+<p>That explains the first anomaly:</p>
+<ul>
+<li>With <strong>3 surfaces</strong>, overlap patterns changed often — confusing the predictor.</li>
+<li>With <strong>5 surfaces</strong>, overlaps repeated more regularly — the predictor learned and stabilized.</li>
+</ul>
+<p>So <code>render()</code> ran <em>45% faster</em> with <em>more work</em>, simply because its control flow became more predictable.</p>
+<p>But one question still hung in the air:<br>why had the alpha-blending paths — full of extra arithmetic — outpaced the supposedly simple <code>render()</code> in the first place?</p>
 <h3 id="arithmetic-vs-control-flow">Arithmetic vs. Control Flow</h3>
-<p>The alpha-blending versions weren’t faster because of math.<br>They were faster because they <strong>did less guessing</strong>.<br>They replaced one unpredictable branch with a predictable, always-executed computation — and in the <strong>small 3-surface case</strong>, that predictability outweighed the cost of extra arithmetic.</p>
-<p>But as the scene grew — more surfaces, more pixels, more work — the balance shifted back.
-Once the CPU’s branch predictor had enough repetition to learn the patterns, the arithmetic overhead started to dominate again, and <code>render()</code> reclaimed its lead.</p>
-<p>So the benchmark reversal wasn’t permanent, nor was it a bug.
-It was a fleeting demonstration of how <strong>branch prediction can momentarily outweigh math</strong> when the workload is small enough and the branches unpredictable.</p>
+<p>It turned out to be the same effect, just seen from the other side.  </p>
+<p>The alpha-blending versions weren’t faster because of math — they were faster because they <strong>did less guessing.</strong><br>They replaced an unpredictable “should I draw?” check with a predictable, always-executed blend.<br>In the <strong>small 3-surface case</strong>, the cost of misprediction outweighed the extra arithmetic, letting alpha win.<br>But as the scene grew, the predictor adapted, the mispredictions dropped, and the math cost took over again.<br><code>render()</code> reclaimed its lead.</p>
+<p>It wasn’t a bug.<br>It was a brief moment where <strong>prediction noise outweighed computation.</strong></p>
 <h3 id="the-vague-suspicion-confirmed">The Vague Suspicion Confirmed</h3>
-<p>Remember that vague suspicion I had earlier?<br>I was right — but I’d underestimated how dramatic the effect could be.</p>
-<p>I knew that mispredicted branches hurt performance, but I didn’t expect them to <strong>dwarf</strong> the cost of entire blending operations.<br>Seeing it this clearly in such a small loop was almost unsettling.</p>
+<p>Remember that vague suspicion I had earlier?<br>I was right — but I had no idea how far it reached. </p>
+<p>I knew mispredicted branches could hurt performance.<br>I didn’t expect them to <strong>dominate</strong> it — to the point where multiplying and dividing every pixel was cheaper than skipping some with a bad guess.<br>Seeing it that clearly in such a small loop was almost unsettling.</p>
 <h2 id="the-smoking-gun">The Smoking Gun</h2>
 <p>After dozens of runs, pattern after pattern, the evidence lined up perfectly.<br>The anomaly wasn’t random noise — it was a systematic interaction between <strong>two kinds of branches</strong>.</p>
 <p>When either bounds checking <em>or</em> occupancy checking was present alone, everything scaled normally.<br>Only when <strong>both</strong> existed in the same tight loop did performance invert.</p>

@@ -3,142 +3,185 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="keywords" content="zig, performance, optimization, software engineering, systems programming">
-  <title>M64's Blog</title>
-  <meta property="og:title" content="M64's Blog">
-  <meta property="og:description" content="My personal blog about zig • low-level • systems • creative engineering">
-  <meta property="og:image" content="https://m64github.github.io/posts/preview.png">
-  <link rel="stylesheet" href="card-minimal.css">
-  <link rel="stylesheet" href="index-style.css">
-  <style>
-    .preview-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 40px 40px;
-    }
-
-    .preview-card {
-      background: transparent;
-      border: none;
-      padding: 30px 40px;
-      text-align: center;
-    }
-
-    .card-logo {
-      margin-bottom: 20px;
-      animation: logoPulse 3s ease-in-out infinite;
-    }
-
-    .card-logo img {
-      max-width: 300px;
-      width: 100%;
-      height: auto;
-      display: block;
-      margin: 0 auto;
-      filter: drop-shadow(0 0 10px var(--neon-cyan));
-    }
-
-    .card-tagline {
-      font-family: 'Orbitron', sans-serif;
-      font-size: 18px;
-      color: var(--neon-cyan);
-      text-shadow: 0 0 10px var(--neon-cyan);
-      letter-spacing: 6px;
-      font-weight: 600;
-      animation: textPulse 3s ease-in-out infinite;
-    }
-
-    .bullet {
-      color: var(--neon-magenta);
-      text-shadow: 0 0 15px var(--neon-magenta);
-      font-weight: 700;
-      animation: bulletPulse 3s ease-in-out infinite;
-      display: inline-block;
-    }
-
-    @keyframes logoPulse {
-      0%, 100% {
-        filter: drop-shadow(0 0 10px var(--neon-cyan));
-      }
-      50% {
-        filter: drop-shadow(0 0 25px var(--neon-magenta)) drop-shadow(0 0 40px var(--neon-purple));
-      }
-    }
-
-    @keyframes textPulse {
-      0%, 100% {
-        text-shadow: 0 0 10px var(--neon-cyan);
-        color: var(--neon-cyan);
-      }
-      50% {
-        text-shadow: 0 0 20px var(--neon-cyan), 0 0 30px var(--neon-magenta);
-        color: #4dffff;
-      }
-    }
-
-    @keyframes bulletPulse {
-      0%, 100% {
-        text-shadow: 0 0 15px var(--neon-magenta);
-        color: var(--neon-magenta);
-      }
-      50% {
-        text-shadow: 0 0 25px var(--neon-magenta), 0 0 35px var(--neon-purple);
-        color: #ff33ff;
-      }
-    }
-  </style>
+  <meta name="keywords" content="amd, rocm, whisper, speech-to-text, linux, radeon-890m, strix-point, local-ai">
+  <title>Whisper on the AMD Radeon 890M</title>
+  <meta property="og:image" content="https://m64github.github.io/posts/whisper-on-the-amd-radeon-890m/images/preview.png">
+  <meta property="og:title" content="Whisper on the AMD Radeon 890M">
+  <meta property="og:description" content="ROCm finally supports Strix Point. I had the perfect use case: replacing Wispr Flow with 500 lines of Python.">
+  <link rel="stylesheet" href="../article-style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 </head>
 <body>
-  <div class="index-container">
-    <div class="preview-container">
-      <div class="preview-card">
-        <div class="card-logo">
-          <img src="m64logo-600.png" alt="M64">
-        </div>
-        <div class="card-tagline">
-          zig <span class="bullet">●</span> code <span class="bullet">●</span> pixels <span class="bullet">●</span> sound
-        </div>
-      </div>
-    </div>
+  <div class="container">
+    <aside class="sidebar">
+      <nav class="table-of-contents">
+<h2>Contents</h2>
+<ul>
+  <li ><a href="#the-new-laptop">The New Laptop</a></li>
+  <li ><a href="#searching-for-alternatives">Searching for Alternatives</a></li>
+  <li ><a href="#the-lucky-discovery">The Lucky Discovery</a></li>
+  <li ><a href="#the-solution">The Solution</a></li>
+  <li ><a href="#performance">Performance</a></li>
+  <li ><a href="#try-it-yourself">Try It Yourself</a></li>
+  <li ><a href="#closing-thoughts">Closing Thoughts</a></li>
+</ul>
+</nav>
 
-    <div class="articles-list">
-      <article class="article-card">
-        <a href="whisper-on-the-amd-radeon-890m/" class="card-link">
-          <div class="card-image">
-            <img src="whisper-on-the-amd-radeon-890m/images/preview.png" alt="Whisper on the AMD Radeon 890M" onerror="this.style.display='none'">
-          </div>
-          <div class="card-content">
-            <div class="card-header">
-              <h2 class="card-title">Whisper on the AMD Radeon 890M</h2>
-              <span class="card-date">12/2025</span>
-            </div>
-            <div class="card-tags">
-              <span class="tag">#amd</span> <span class="tag">#rocm</span> <span class="tag">#whisper</span> <span class="tag">#speech-to-text</span> <span class="tag">#linux</span> <span class="tag">#radeon-890m</span> <span class="tag">#strix-point</span> <span class="tag">#local-ai</span>
-            </div>
-            <p class="card-description">ROCm finally supports Strix Point. I had the perfect use case: replacing Wispr Flow with 500 lines of Python.</p>
-          </div>
-        </a>
-      </article>
+    </aside>
 
-      <article class="article-card">
-        <a href="when-optimized-code-runs-slower/" class="card-link">
-          <div class="card-image">
-            <img src="when-optimized-code-runs-slower/images/preview.png" alt="When “Optimized” Code Runs Slower" onerror="this.style.display='none'">
-          </div>
-          <div class="card-content">
-            <div class="card-header">
-              <h2 class="card-title">When “Optimized” Code Runs Slower</h2>
-              <span class="card-date">11/2025</span>
-            </div>
-            <div class="card-tags">
-              <span class="tag">#zig</span> <span class="tag">#performance</span> <span class="tag">#branch-prediction</span> <span class="tag">#rendering</span>
-            </div>
-            <p class="card-description">What a terminal renderer taught me about branch prediction, CPU pipelines, and the beauty of being wrong.</p>
-          </div>
-        </a>
-      </article>
-    </div>
+    <main class="article-content">
+      <div class="article-tags">
+    <span class="tag">#amd</span> <span class="tag">#rocm</span> <span class="tag">#whisper</span> <span class="tag">#speech-to-text</span> <span class="tag">#linux</span> <span class="tag">#radeon-890m</span> <span class="tag">#strix-point</span> <span class="tag">#local-ai</span>
   </div>
+<h1 id="whisper-on-the-amd-radeon-890m">Whisper on the AMD Radeon 890M</h1>
+<p><strong>ROCm finally supports Strix Point. I had the perfect use case: replacing Wispr Flow with 500 lines of Python.</strong></p>
+<div class="article-byline">M. Schallner, 2025.12.28</div>
+<p>I love my MacBook. For years it&#39;s been my go-to machine for all kinds of work: low-level coding in Zig, living in the terminal with Neovim, and everything multimedia - from music production to video editing. Apple Silicon delivers incredible performance, and things just <em>work</em>.</p>
+<h2 id="the-new-laptop">The New Laptop</h2>
+<p>I finally did something I&#39;d secretly wanted for a while: get a proper Linux laptop.</p>
+<p>Finally I can do low-level network I/O development, and get <em>real</em> performance measurements of io_uring with kernel-passed buffers, etc. Benchmarking through a VM or compatibility layer, I tried on the mac, but that didn&#39;t give me the numbers I need. The decision was then simple: I need bare metal Linux, real syscalls, undistorted metrics.</p>
+<p>So I got a Tuxedo with an AMD Ryzen AI 9 HX 370 and 96GB RAM, running Ubuntu 24.04.</p>
+<p><strong>The Tuxedo turned out to be a beast</strong>. Everything I threw at it worked. My Zig toolchain, compiling neovim, all my development workflows - no problems. Compile times rivaling the M4. I was impressed.</p>
+<p>But I noticed something missing.</p>
+<p>One tool I had grown to rely on - almost without realizing it - was <code>Wispr Flow</code>. Voice-to-text for quick emails, notes, documentation drafts. Hold a button, speak, done. It had quietly become part of how I work.</p>
+<p>Wispr Flow is Mac-only. And suddenly, I missed it.</p>
+<h2 id="searching-for-alternatives">Searching for Alternatives</h2>
+<p>My search for a Linux replacement was kind of frustrating. The options I found were either:</p>
+<ul>
+<li>Difficult to install with complex dependencies</li>
+<li>Didn&#39;t work out of the box</li>
+<li>Required cloud APIs (defeating the &quot;local&quot; purpose I had in mind)</li>
+<li><strong>Didn&#39;t support my hardware</strong></li>
+</ul>
+<p>I started researching the underlying technology - OpenAI&#39;s Whisper models. The question became: <em>Can I just run this myself?</em> How do I chain microphone input to the model and display results? Sounds simple enough.<br>And what about GPU acceleration? Running Whisper on CPU is painfully slow.</p>
+<h2 id="the-lucky-discovery">The Lucky Discovery</h2>
+<p>Here&#39;s where timing played in my favor. So I have an AMD Radeon 890M (integrated graphics on the Ryzen AI 9 HX 370) - that&#39;s the new Strix Point architecture, internally called gfx1150.</p>
+<p>When I first searched for solutions with ROCm support, everything I found was outdated. No mentions of gfx1150 anywhere. I was ready to accept CPU-only inference.</p>
+<p>I did not want to accept this so easily, and by diging deeper, I discovered that AMD had <em>just</em> released ROCm support for Strix Point. The stars aligned - I got my laptop right around the time my GPU became a first-class citizen in the ROCm ecosystem!</p>
+<h2 id="the-solution">The Solution</h2>
+<p>With GPU acceleration now possible, I sat down to build something. The implementation was surprisingly fast - especially for someone who doesn&#39;t do much Python. I expected quite some low-level wrangling. Instead, I had a working prototype within an hour.</p>
+<p>Here&#39;s what I used:</p>
+<p><strong>FastAPI</strong> for the backend. I&#39;d never used it before, but it&#39;s remarkably clean. Two endpoints: one to serve the HTML page, one POST endpoint for transcription. That&#39;s it.</p>
+<p><strong>PyTorch + Whisper</strong> for inference. This was the real surprise. Loading the model and running inference is almost trivial:</p>
+<pre><code class="hljs language-python">device = <span class="hljs-string">&quot;cuda&quot;</span> <span class="hljs-keyword">if</span> torch.cuda.is_available() <span class="hljs-keyword">else</span> <span class="hljs-string">&quot;cpu&quot;</span>
+model = whisper.load_model(<span class="hljs-string">&quot;medium&quot;</span>, device=device)
+
+<span class="hljs-comment"># Later, in the endpoint:</span>
+result = model.transcribe(audio_path)
+<span class="hljs-keyword">return</span> {<span class="hljs-string">&quot;text&quot;</span>: result[<span class="hljs-string">&quot;text&quot;</span>]}
+</code></pre><p>No complex setup. No manual tensor management. PyTorch&#39;s ROCm integration means I just say <code>&quot;cuda&quot;</code> and it routes to my AMD GPU transparently.</p>
+<p><strong>Browser APIs</strong> for the frontend. The MediaRecorder API captures audio from the microphone, the Web Audio API provides real-time frequency data for visualization. The flow:</p>
+<ol>
+<li>User holds button → <code>navigator.mediaDevices.getUserMedia({ audio: true })</code></li>
+<li>Audio streams into MediaRecorder, accumulating chunks</li>
+<li>Simultaneously, an AnalyserNode feeds frequency data to a canvas for the live visualizer</li>
+<li>User releases → audio blob sent as FormData POST to <code>/transcribe</code></li>
+<li>Backend saves to temp file, runs <code>model.transcribe()</code>, returns JSON</li>
+<li>Frontend displays result, auto-selects text for easy copy</li>
+</ol>
+<p><strong>The visualizer</strong> was a fun addition. 64 frequency bars, mirrored around the center, with a cyan-to-magenta gradient and glow effects. The Web Audio API&#39;s <code>getByteFrequencyData()</code> makes this almost too easy - you get an array of frequency amplitudes, map them to bar heights, done. Added some CSS scanlines and a vignette for that CRT aesthetic. All within minutes.</p>
+<p>The entire app is a single Python file - backend, HTML, CSS, and JavaScript all inline. Around 500 lines total.</p>
+<p>The result:</p>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/screenshot-ui.png" alt="Screenshot UI" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot UI<br><small>Place image at: arender/output/whisper-on-the-amd-radeon-890m/images/screenshot-ui.png</small></div>'">
+  </div>
+  <figcaption>Screenshot UI</figcaption>
+</figure>
+<p>Press and hold to record, release to transcribe. One-click copy. That&#39;s it.</p>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-amd-radeon-890m/images/screenshot-recording.png</small></div>'">
+  </div>
+  <figcaption>Screenshot Recording</figcaption>
+</figure>
+<p>Starting the app shows the GPU is properly detected:</p>
+<pre><code>❯ python App.py
+Loading Whisper model on cuda...
+GPU: AMD Radeon 890M Graphics
+Model loaded!
+INFO:     Started server process [60192]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+</code></pre><h2 id="performance">Performance</h2>
+<p>Here&#39;s what the Radeon 890M delivers with Whisper&#39;s medium model (769M parameters), and a measurement with the small version for comparison:</p>
+<table>
+<thead>
+<tr>
+<th>Audio Duration</th>
+<th>Processing Time</th>
+<th>Model</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>5.0s</td>
+<td>3.82s</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>14.4s</td>
+<td>5.03s</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>6.0s</td>
+<td>2.11s</td>
+<td>small</td>
+</tr>
+</tbody></table>
+<p>Faster than real-time transcription on an integrated GPU. Not bad at all.</p>
+<h2 id="try-it-yourself">Try It Yourself</h2>
+<p>If you have a recent AMD GPU (especially the new Radeon 800M series) and want local speech-to-text, here&#39;s how to get started:</p>
+<pre><code class="hljs language-bash">git <span class="hljs-built_in">clone</span> https://github.com/M64GitHub/whisper-rocm.git
+<span class="hljs-built_in">cd</span> whisper-rocm
+python -m venv venv
+<span class="hljs-built_in">source</span> venv/bin/activate
+
+<span class="hljs-comment"># For Radeon 890M / 880M (gfx1150):</span>
+pip install --index-url https://repo.amd.com/rocm/whl/gfx1150/ torch
+
+pip install -r requirements.txt
+python App.py
+</code></pre><p>Open <code>http://localhost:8000</code> in your browser, and you&#39;re done.</p>
+<p>The repo includes instructions for other AMD GPUs and NVIDIA cards as well.</p>
+<h2 id="closing-thoughts">Closing Thoughts</h2>
+<p>If you have one of the latest Radeon mobile GPUs and have been wondering whether local AI workloads are possible - they are. ROCm support for Strix Point is here.</p>
+<p>This little project is of course not a groundbreaking invention. It&#39;s a simple app solving a simple problem. But when I was searching for this information, I found very little about running Whisper on the newest AMD integrated graphics. Hopefully this helps someone else in the same situation.</p>
+<p>The code is on GitHub: <a href="https://github.com/M64GitHub/whisper-rocm">github.com/M64GitHub/whisper-rocm</a></p>
+<hr>
+
+    </main>
+  </div>
+
+  <script>
+    // Smooth scrolling for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Highlight current section in TOC
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.getAttribute('id');
+          document.querySelectorAll('.table-of-contents a').forEach(a => {
+            a.classList.remove('active');
+            if (a.getAttribute('href') === '#' + id) {
+              a.classList.add('active');
+            }
+          });
+        }
+      });
+    }, { rootMargin: '-100px 0px -66%' });
+
+    document.querySelectorAll('h2[id]').forEach(h => observer.observe(h));
+  </script>
 </body>
 </html>

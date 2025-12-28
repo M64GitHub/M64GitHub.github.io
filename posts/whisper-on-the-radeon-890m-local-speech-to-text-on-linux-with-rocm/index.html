@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="keywords" content="amd, rocm, whisper, speech-to-text, linux, radeon-890m, strix-point, local-ai">
-  <title>Whisper on the AMD Radeon 890M</title>
-  <meta property="og:image" content="https://m64github.github.io/posts/whisper-on-the-amd-radeon-890m/images/preview.png">
-  <meta property="og:title" content="Whisper on the AMD Radeon 890M">
-  <meta property="og:description" content="ROCm finally supports Strix Point. I had the perfect use case: replacing Wispr Flow with 500 lines of Python.">
+  <title>Whisper on the Radeon 890M: Local Speech-to-Text on Linux with ROCm</title>
+  <meta property="og:image" content="https://m64github.github.io/posts/whisper-on-the-radeon-890m-local-speech-to-text-on-linux-with-rocm/images/preview.png">
+  <meta property="og:title" content="Whisper on the Radeon 890M: Local Speech-to-Text on Linux with ROCm">
+  <meta property="og:description" content="ROCm finally supports Strix Point - and I had the perfect use case: replacing Wispr Flow with 500 lines of Python.">
   <link rel="stylesheet" href="../article-style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 </head>
@@ -17,10 +17,10 @@
       <nav class="table-of-contents">
 <h2>Contents</h2>
 <ul>
-  <li ><a href="#the-new-laptop">The New Laptop</a></li>
-  <li ><a href="#searching-for-alternatives">Searching for Alternatives</a></li>
-  <li ><a href="#the-lucky-discovery">The Lucky Discovery</a></li>
-  <li ><a href="#the-solution">The Solution</a></li>
+  <li ><a href="#switching-to-linux-for-real-performance">Switching to Linux for Real Performance</a></li>
+  <li ><a href="#why-existing-linux-solutions-didn-t-work">Why Existing Linux Solutions Didn't Work</a></li>
+  <li ><a href="#rocm-finally-supports-strix-point">ROCm Finally Supports Strix Point</a></li>
+  <li ><a href="#building-a-local-whisper-app">Building a Local Whisper App</a></li>
   <li ><a href="#performance">Performance</a></li>
   <li ><a href="#try-it-yourself">Try It Yourself</a></li>
   <li ><a href="#closing-thoughts">Closing Thoughts</a></li>
@@ -33,19 +33,19 @@
       <div class="article-tags">
     <span class="tag">#amd</span> <span class="tag">#rocm</span> <span class="tag">#whisper</span> <span class="tag">#speech-to-text</span> <span class="tag">#linux</span> <span class="tag">#radeon-890m</span> <span class="tag">#strix-point</span> <span class="tag">#local-ai</span>
   </div>
-<h1 id="whisper-on-the-amd-radeon-890m">Whisper on the AMD Radeon 890M</h1>
-<p><strong>ROCm finally supports Strix Point. I had the perfect use case: replacing Wispr Flow with 500 lines of Python.</strong></p>
+<h1 id="whisper-on-the-radeon-890m-local-speech-to-text-on-linux-with-rocm">Whisper on the Radeon 890M: Local Speech-to-Text on Linux with ROCm</h1>
+<p><strong>ROCm finally supports Strix Point - and I had the perfect use case: replacing Wispr Flow with 500 lines of Python.</strong></p>
 <div class="article-byline">M. Schallner, 2025.12.28</div>
-<p>I love my MacBook. For years it&#39;s been my go-to machine for all kinds of work: low-level coding in Zig, living in the terminal with Neovim, and everything multimedia - from music production to video editing. Apple Silicon delivers incredible performance, and things just <em>work</em>.</p>
-<h2 id="the-new-laptop">The New Laptop</h2>
+<p>AMD recently added ROCm support for Strix Point GPUs. That means the integrated Radeon 890M (gfx1150) can now run GPU-accelerated ML workloads on Linux. I used this to run OpenAI&#39;s Whisper locally and build a small, entirely offline voice-to-text app that replaces Wispr Flow in about 500 lines of Python.</p>
+<h2 id="switching-to-linux-for-real-performance">Switching to Linux for Real Performance</h2>
 <p>I finally did something I&#39;d secretly wanted for a while: get a proper Linux laptop.</p>
-<p>I needed to do low-level network I/O development - real performance measurements of io_uring with kernel-passed buffers. I tried benchmarking through a VM, compatibility layers, but the numbers were never quite right. Time for bare metal Linux, real syscalls, undistorted metrics.</p>
+<p>I needed to do low-level network I/O development - real performance measurements of io_uring with kernel-passed buffers. I tried benchmarking through a VM and various compatibility layers, but the numbers were never quite right. Time for bare metal Linux, real syscalls, undistorted metrics.</p>
 <p>So I got a brandnew Tuxedo with an AMD Ryzen AI 9 HX 370 and 96GB RAM, running Ubuntu 24.04. </p>
-<p><code>The Tuxedo  turned out to be a beast!</code> Everything I threw at it worked. My Zig toolchain, compiling neovim in 15 seconds, all my development workflows - no problems.<br>Compile times rivaling the M4. I was impressed.</p>
+<p>The Tuxedo  turned out to be a beast. Everything I threw at it worked. My Zig toolchain, compiling neovim in 15 seconds, all my development workflows - no problems.<br>Compile times rivaling the M4. I was impressed.</p>
 <p>But I noticed something missing.</p>
 <p>One tool I had grown to rely on - almost without realizing it - was <code>Wispr Flow</code>. Voice-to-text for quick emails, notes, documentation drafts. Hold a button, speak, done. It had quietly become part of how I work.</p>
 <p>Wispr Flow is Mac-only. And suddenly, I missed it.</p>
-<h2 id="searching-for-alternatives">Searching for Alternatives</h2>
+<h2 id="why-existing-linux-solutions-didn-39-t-work">Why Existing Linux Solutions Didn&#39;t Work</h2>
 <p>My search for a Linux replacement was kind of frustrating. The options I found were either:</p>
 <ul>
 <li>Difficult to install with complex dependencies</li>
@@ -55,11 +55,11 @@
 </ul>
 <p>I started researching the underlying technology - OpenAI&#39;s Whisper models. The question became: <em>Can I just run this myself?</em></p>
 <p>How do I chain microphone input to the model and display results? And what about GPU acceleration? Running Whisper on CPU is painfully slow.</p>
-<h2 id="the-lucky-discovery">The Lucky Discovery</h2>
+<h2 id="rocm-finally-supports-strix-point">ROCm Finally Supports Strix Point</h2>
 <p>Here&#39;s where timing played in my favor. So I have an AMD Radeon 890M (integrated graphics on the Ryzen AI 9 HX 370) - that&#39;s the new Strix Point architecture, internally called gfx1150.</p>
 <p>When I first searched for solutions with ROCm support, everything I found was outdated. No mentions of gfx1150 anywhere. I was ready to accept CPU-only inference.</p>
 <p>I did not want to accept this so easily, and by diging deeper, I discovered that AMD had <em>just</em> released ROCm support for Strix Point. The stars aligned - I got my laptop right around the time my GPU became a first-class citizen in the ROCm ecosystem!</p>
-<h2 id="the-solution">The Solution</h2>
+<h2 id="building-a-local-whisper-app">Building a Local Whisper App</h2>
 <p>With GPU acceleration now possible, I sat down to build something. The implementation was surprisingly fast - especially for someone who doesn&#39;t do much Python. I expected quite some low-level wrangling. Instead, I had a working prototype within an hour.</p>
 <p>Here&#39;s what I used:</p>
 <p><strong>FastAPI</strong> for the backend. I&#39;d never used it before, but it&#39;s remarkably clean. Two endpoints: one to serve the HTML page, one POST endpoint for transcription. That&#39;s it.</p>
@@ -85,7 +85,7 @@ result = model.transcribe(audio_path)
 <p>The result:</p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/screenshot-ui.png" alt="Screenshot UI" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot UI<br><small>Place image at: arender/output/whisper-on-the-amd-radeon-890m/images/screenshot-ui.png</small></div>'">
+    <img src="images/screenshot-ui.png" alt="Screenshot UI" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot UI<br><small>Place image at: arender/output/whisper-on-the-radeon-890m-local-speech-to-text-on-linux-with-rocm/images/screenshot-ui.png</small></div>'">
   </div>
   <figcaption>Screenshot UI</figcaption>
 </figure>
@@ -128,7 +128,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 <p>Faster than real-time transcription on an integrated GPU. Not bad at all.</p>
 <figure class="article-image">
   <div class="image-placeholder">
-    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-amd-radeon-890m/images/screenshot-recording.png</small></div>'">
+    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-radeon-890m-local-speech-to-text-on-linux-with-rocm/images/screenshot-recording.png</small></div>'">
   </div>
   <figcaption>Screenshot Recording</figcaption>
 </figure>

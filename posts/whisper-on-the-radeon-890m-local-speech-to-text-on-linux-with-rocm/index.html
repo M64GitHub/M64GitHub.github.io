@@ -39,7 +39,7 @@
 <p>AMD recently added ROCm support for Strix Point GPUs. That means the integrated Radeon 890M (gfx1150) can now run GPU-accelerated ML workloads on Linux. I used this to run OpenAI&#39;s Whisper locally and build a small, entirely offline voice-to-text app that replaces Wispr Flow in about 500 lines of Python.</p>
 <h2 id="switching-to-linux-for-real-performance">Switching to Linux for Real Performance</h2>
 <p>Up until this point, my main machine had been a MacBook with Apple Silicon (M4) - fast, reliable, and a great fit for my day-to-day work and development projects. But for what I wanted to do next, that wasn&#39;t quite enough.</p>
-<p>I needed accurate, undistorted performance measurements for low-level network I/O work on Linux - real io_uring measurements without VMs or compatibility layers in the way.</p>
+<p>I needed accurate, undistorted performance measurements for low-level network I/O work on <code>Linux</code> - real io_uring measurements without VMs or compatibility layers in the way.</p>
 <p>So I finally did something I&#39;d secretly wanted for a while: get a proper Linux laptop.</p>
 <p>The result was a brand-new Tuxedo: an AMD Ryzen AI 9 HX 370 with 96 GB RAM, running Ubuntu 24.04. It turned out to be a beast. Everything worked out of the box - my Zig toolchain, Neovim builds in 15 seconds, all my usual workflows. Compile times rivaled the M4.</p>
 <p>The transition felt almost boringly smooth. Everything carried over without friction. I didn&#39;t feel like I was giving anything up.</p>

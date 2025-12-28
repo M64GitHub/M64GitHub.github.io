@@ -80,7 +80,7 @@ result = model.transcribe(audio_path)
 <li>Backend saves to temp file, runs <code>model.transcribe()</code>, returns JSON</li>
 <li>Frontend displays result, auto-selects text for easy copy</li>
 </ol>
-<p><strong>The visualizer</strong> was a fun addition. 64 frequency bars, mirrored around the center, with a cyan-to-magenta gradient and glow effects. The Web Audio API&#39;s <code>getByteFrequencyData()</code> makes this almost too easy - you get an array of frequency amplitudes, map them to bar heights, done. Added some CSS scanlines and a vignette for that CRT aesthetic. All within minutes.</p>
+<p><strong>The visualizer</strong> was a fun addition. 64 frequency bars, mirrored around the center, with a cyan-to-magenta gradient and glow effects. The Web Audio API&#39;s <code>getByteFrequencyData()</code> makes this almost too easy - you get an array of frequency amplitudes, map them to bar heights, done. Added some CSS scanlines and a vignette for that CRT aesthetic - most of the styling came from earlier projects.</p>
 <p>The entire app is a single Python file - backend, HTML, CSS, and JavaScript all inline. Around 500 lines total.</p>
 <p>The result:</p>
 <figure class="article-image">

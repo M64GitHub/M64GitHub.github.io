@@ -53,7 +53,8 @@
 <li>Required cloud APIs (defeating the &quot;local&quot; purpose I had in mind)</li>
 <li><strong>Didn&#39;t support my hardware</strong></li>
 </ul>
-<p>I started researching the underlying technology - OpenAI&#39;s Whisper models. The question became: <em>Can I just run this myself?</em> How do I chain microphone input to the model and display results? Sounds simple enough.<br>And what about GPU acceleration? Running Whisper on CPU is painfully slow.</p>
+<p>I started researching the underlying technology - OpenAI&#39;s Whisper models. The question became: <em>Can I just run this myself?</em></p>
+<p>How do I chain microphone input to the model and display results? And what about GPU acceleration? Running Whisper on CPU is painfully slow.</p>
 <h2 id="the-lucky-discovery">The Lucky Discovery</h2>
 <p>Here&#39;s where timing played in my favor. So I have an AMD Radeon 890M (integrated graphics on the Ryzen AI 9 HX 370) - that&#39;s the new Strix Point architecture, internally called gfx1150.</p>
 <p>When I first searched for solutions with ROCm support, everything I found was outdated. No mentions of gfx1150 anywhere. I was ready to accept CPU-only inference.</p>

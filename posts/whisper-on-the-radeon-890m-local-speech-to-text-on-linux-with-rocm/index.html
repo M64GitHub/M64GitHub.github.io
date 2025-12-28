@@ -55,7 +55,7 @@
 <p>I started researching the underlying technology - OpenAI&#39;s Whisper models. The question became: <em>Can I just run this myself?</em></p>
 <p>How do I chain microphone input to the model and display results? And what about GPU acceleration? Running Whisper on CPU is painfully slow.</p>
 <h2 id="rocm-finally-supports-strix-point">ROCm Finally Supports Strix Point</h2>
-<p>Here&#39;s where timing played in my favor. So I have an AMD Radeon 890M (integrated graphics on the Ryzen AI 9 HX 370) - that&#39;s the new Strix Point architecture, internally called gfx1150.</p>
+<p>Here&#39;s where timing played in my favor. So I have an AMD Radeon 890M (integrated graphics on the Ryzen AI 9 HX 370) - that&#39;s the new Strix Point architecture, internally called <code>gfx1150</code>.</p>
 <p>When I first searched for solutions with ROCm support, everything I found was outdated. No mentions of gfx1150 anywhere. I was ready to accept CPU-only inference.</p>
 <p>But I did not want to accept this so easily, and by diging deeper, I discovered that AMD had <em>just</em> released ROCm support for Strix Point. The stars aligned - I got my laptop right around the time my GPU became a first-class citizen in the ROCm ecosystem!</p>
 <h2 id="building-a-local-whisper-app">Building a Local Whisper App</h2>
@@ -146,7 +146,6 @@ python App.py
 </code></pre><p>Open <code>http://localhost:8000</code> in your browser, and you&#39;re done.</p>
 <p>The repo includes instructions for other AMD GPUs and NVIDIA cards as well.</p>
 <h2 id="final-notes">Final Notes</h2>
-<p>If you have one of the latest Radeon mobile GPUs and have been wondering whether local AI workloads are possible - they are. ROCm support for Strix Point is here.</p>
 <p>This little project is of course not a groundbreaking invention. It&#39;s a simple app solving a simple problem. But when I was searching for this information, I found very little about running Whisper on the newest AMD integrated graphics. Hopefully this helps someone else in the same situation.</p>
 <p>The code is on GitHub: <a href="https://github.com/M64GitHub/whisper-rocm">github.com/M64GitHub/whisper-rocm</a></p>
 <hr>

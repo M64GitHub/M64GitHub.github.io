@@ -39,9 +39,9 @@
 <p>I love my MacBook. For years it&#39;s been my go-to machine for all kinds of work: low-level coding in Zig, living in the terminal with Neovim, and everything multimedia - from music production to video editing. Apple Silicon delivers incredible performance, and things just <em>work</em>.</p>
 <h2 id="the-new-laptop">The New Laptop</h2>
 <p>I finally did something I&#39;d secretly wanted for a while: get a proper Linux laptop.</p>
-<p>Finally I can do low-level network I/O development, and get <em>real</em> performance measurements of io_uring with kernel-passed buffers, etc. Benchmarking through a VM or compatibility layer, I tried on the mac, but that didn&#39;t give me the numbers I need. The decision was then simple: I need bare metal Linux, real syscalls, undistorted metrics.</p>
-<p>So I got a Tuxedo with an AMD Ryzen AI 9 HX 370 and 96GB RAM, running Ubuntu 24.04.</p>
-<p><strong>The Tuxedo turned out to be a beast</strong>. Everything I threw at it worked. My Zig toolchain, compiling neovim, all my development workflows - no problems. Compile times rivaling the M4. I was impressed.</p>
+<p>I needed to do low-level network I/O development - real performance measurements of io_uring with kernel-passed buffers. I tried benchmarking through a VM, compatibility layers, but the numbers were never quite right. Time for bare metal Linux, real syscalls, undistorted metrics.</p>
+<p>So I got a brandnew Tuxedo (InfinityBook Pro 15 - Gen10) with an AMD Ryzen AI 9 HX 370 and 96GB RAM, running Ubuntu 24.04. </p>
+<p><em>The Tuxedo  turned out to be a beast!</em> Everything I threw at it worked. My Zig toolchain, compiling neovim in 15 seconds, all my development workflows - no problems.<br>Compile times rivaling the M4. I was impressed.</p>
 <p>But I noticed something missing.</p>
 <p>One tool I had grown to rely on - almost without realizing it - was <code>Wispr Flow</code>. Voice-to-text for quick emails, notes, documentation drafts. Hold a button, speak, done. It had quietly become part of how I work.</p>
 <p>Wispr Flow is Mac-only. And suddenly, I missed it.</p>
@@ -89,12 +89,6 @@ result = model.transcribe(audio_path)
   <figcaption>Screenshot UI</figcaption>
 </figure>
 <p>Press and hold to record, release to transcribe. One-click copy. That&#39;s it.</p>
-<figure class="article-image">
-  <div class="image-placeholder">
-    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-amd-radeon-890m/images/screenshot-recording.png</small></div>'">
-  </div>
-  <figcaption>Screenshot Recording</figcaption>
-</figure>
 <p>Starting the app shows the GPU is properly detected:</p>
 <pre><code>❯ python App.py
 Loading Whisper model on cuda...
@@ -131,6 +125,12 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 </tr>
 </tbody></table>
 <p>Faster than real-time transcription on an integrated GPU. Not bad at all.</p>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-amd-radeon-890m/images/screenshot-recording.png</small></div>'">
+  </div>
+  <figcaption>Screenshot Recording</figcaption>
+</figure>
 <h2 id="try-it-yourself">Try It Yourself</h2>
 <p>If you have a recent AMD GPU (especially the new Radeon 800M series) and want local speech-to-text, here&#39;s how to get started:</p>
 <pre><code class="hljs language-bash">git <span class="hljs-built_in">clone</span> https://github.com/M64GitHub/whisper-rocm.git

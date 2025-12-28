@@ -99,7 +99,13 @@ INFO:     Started server process [60192]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-</code></pre><h2 id="performance">Performance</h2>
+</code></pre><figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-radeon-890m-local-speech-to-text-on-linux-with-rocm/images/screenshot-recording.png</small></div>'">
+  </div>
+  <figcaption>Screenshot Recording</figcaption>
+</figure>
+<h2 id="performance">Performance</h2>
 <p>Here&#39;s what the Radeon 890M delivers with Whisper&#39;s medium model (769M parameters), and a measurement with the small version for comparison:</p>
 <table>
 <thead>
@@ -126,12 +132,6 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 </tr>
 </tbody></table>
 <p>Faster than real-time transcription on an integrated GPU. Not bad at all.</p>
-<figure class="article-image">
-  <div class="image-placeholder">
-    <img src="images/screenshot-recording.png" alt="Screenshot Recording" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Screenshot Recording<br><small>Place image at: arender/output/whisper-on-the-radeon-890m-local-speech-to-text-on-linux-with-rocm/images/screenshot-recording.png</small></div>'">
-  </div>
-  <figcaption>Screenshot Recording</figcaption>
-</figure>
 <h2 id="try-it-yourself">Try It Yourself</h2>
 <p>If you have a recent AMD GPU (especially the new Radeon 800M series) and want local speech-to-text, here&#39;s how to get started:</p>
 <pre><code class="hljs language-bash">git <span class="hljs-built_in">clone</span> https://github.com/M64GitHub/whisper-rocm.git

@@ -23,7 +23,7 @@
   <li ><a href="#building-a-local-whisper-app">Building a Local Whisper App</a></li>
   <li ><a href="#performance">Performance</a></li>
   <li ><a href="#try-it-yourself">Try It Yourself</a></li>
-  <li ><a href="#closing-thoughts">Closing Thoughts</a></li>
+  <li ><a href="#final-notes">Final Notes</a></li>
 </ul>
 </nav>
 
@@ -46,7 +46,7 @@
 <p>At least not at first.</p>
 <p>The one thing I hadn&#39;t thought about at all was voice-to-text. On macOS, Wispr Flow had quietly become part of my daily workflow - quick notes, emails, documentation drafts. And when I tried to replicate that on Linux, things got complicated fast.</p>
 <h2 id="why-existing-linux-solutions-didn-39-t-work">Why Existing Linux Solutions Didn&#39;t Work</h2>
-<p>My search for a Linux replacement was kind of frustrating. The options I found were either:</p>
+<p>My search for a Linux replacement was kind of frustrating. The options I found were a combination of:</p>
 <ul>
 <li>Difficult to install with complex dependencies</li>
 <li>Didn&#39;t work out of the box</li>
@@ -146,7 +146,7 @@ pip install -r requirements.txt
 python App.py
 </code></pre><p>Open <code>http://localhost:8000</code> in your browser, and you&#39;re done.</p>
 <p>The repo includes instructions for other AMD GPUs and NVIDIA cards as well.</p>
-<h2 id="closing-thoughts">Closing Thoughts</h2>
+<h2 id="final-notes">Final Notes</h2>
 <p>If you have one of the latest Radeon mobile GPUs and have been wondering whether local AI workloads are possible - they are. ROCm support for Strix Point is here.</p>
 <p>This little project is of course not a groundbreaking invention. It&#39;s a simple app solving a simple problem. But when I was searching for this information, I found very little about running Whisper on the newest AMD integrated graphics. Hopefully this helps someone else in the same situation.</p>
 <p>The code is on GitHub: <a href="https://github.com/M64GitHub/whisper-rocm">github.com/M64GitHub/whisper-rocm</a></p>

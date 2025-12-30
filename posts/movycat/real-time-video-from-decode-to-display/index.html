@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="keywords" content="audio-video sync, frame dropping, real-time playback, ring buffer, ffmpeg, zig, terminal">
+  <meta name="article-part" content="1">
+  <title>Real-Time Video: From Decode to Display</title>
+  <meta property="og:image" content="https://m64github.github.io/posts/movycat/real-time-video-from-decode-to-display/images/preview.png">
+  <meta property="og:title" content="Real-Time Video: From Decode to Display">
+  <meta property="og:description" content="Constraints, clocks, and deadlines in a terminal video player">
+  <link rel="stylesheet" href="../../article-style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <nav class="table-of-contents">
+<h2>Contents</h2>
+<ul>
+  <li ><a href="#one-clock-to-rule-them-all">One Clock to Rule Them All</a></li>
+  <li ><a href="#zero-allocations-in-the-hot-path">Zero Allocations in the Hot Path</a></li>
+  <li ><a href="#the-40ms-render-budget">The 40ms Render Budget</a></li>
+  <li ><a href="#putting-it-together-the-main-loop">Putting It Together: The Main Loop</a></li>
+  <li ><a href="#final-notes">Final Notes</a></li>
+</ul>
+</nav>
+
+    </aside>
+
+    <main class="article-content">
+      <div class="article-tags">
+    <span class="tag">#audio-video sync</span> <span class="tag">#frame dropping</span> <span class="tag">#real-time playback</span> <span class="tag">#ring buffer</span> <span class="tag">#ffmpeg</span> <span class="tag">#zig</span> <span class="tag">#terminal</span>
+  </div>
+<h1 id="real-time-video-from-decode-to-display">Real-Time Video: From Decode to Display</h1>
+<p class="article-subtitle">Constraints, clocks, and deadlines in a terminal video player</p>
+<div class="article-byline">M. Schallner, 2025.12.30</div>
+<p><em>movycat is a terminal-based video player built on top of movy, a terminal rendering engine written in Zig.</em></p>
+<p><em>Code is available on GitHub:</em></p>
+<ul>
+<li>movycat: <a href="https://github.com/M64GitHub/movycat">https://github.com/M64GitHub/movycat</a></li>
+<li>movy: <a href="https://github.com/M64GitHub/movy">https://github.com/M64GitHub/movy</a></li>
+</ul>
+<p>This is the first article in &quot;The Making of movycat&quot; - a behind-the-scenes look at building a terminal video player in Zig. When I started, I thought it would be straightforward: I could already render frames in the terminal, and FFmpeg can decode pretty much any video format. How hard could it be to wire them together?</p>
+<p>Within seconds of playback, audio and video were visibly drifting. Effects missed their beats. Pausing broke timing. Seeking made everything fall apart.</p>
+<p>Turns out, there&#39;s a gap between &quot;decode frames and display them&quot; and &quot;build a video player.&quot;</p>
+<p>This series documents what I discovered along the way - the hidden complexity, the surprising gotchas, and the solutions I built. Not API tutorials, but what it takes to make the pieces actually work together.</p>
+<p>This first article focuses on the constraints that make or break the playback hot path:</p>
+<ul>
+<li><strong>A/V Synchronization</strong> - one clock, clear tolerance, and decisive render/drop/wait behavior</li>
+<li><strong>Speed</strong> - zero allocations in the hot path and bounded per-frame work</li>
+<li><strong>Stability</strong> - explicit budgets and timeouts that fail fast instead of degrading silently</li>
+</ul>
+<p>They directly shape the control flow, data structures, and failure modes of the player.</p>
+<h2 id="one-clock-to-rule-them-all">One Clock to Rule Them All</h2>
+<p>My first attempt had no synchronization at all - just decode and display frames as fast as possible. Before adding complexity, I wanted to see how far that would get me.</p>
+<p>For testing, I intentionally used demoscene videos, where music and visuals are tightly coupled and effects are precisely timed to the beat.</p>
+<p>Very quickly, the problem was obvious: effects were firing after their corresponding beats. It became clear there’s no cheap way to “just use what the codecs return.”</p>
+<p>My first instinct was the straightforward one: if I want proper A/V synchronization, I need to track where audio playback is, and sync video to that position. I tried querying SDL for the audio queue position. But the queue position tells you how much audio is <em>buffered</em>, not what&#39;s <em>audible right now</em>. That&#39;s not useful for sync.</p>
+<p>That&#39;s when I realized I was overcomplicating things. After all, audio plays back in real-time - that&#39;s what SDL guarantees, assuming a stable audio device clock. If I started playback at time T and N nanoseconds have passed, the audio at position N is what the user hears now. I don&#39;t need to query anything. The elapsed wall clock time since playback started is the audio position. (In a full media player you might track device latency and drift more explicitly, but for movycat this model is intentionally simple - and it holds up well in practice.)</p>
+<p>This simplified the entire synchronization model. I &quot;only&quot; need to sync video against the clock. Audio runs by itself - I just push samples continuously, and SDL plays them at the correct rate.</p>
+<p>One wall clock as the source of truth.</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:161-163</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> getPlaybackClock(self: *VideoDecoder) <span class="hljs-built_in">i128</span> {
+    <span class="hljs-keyword">return</span> std.time.nanoTimestamp() - self.clock_start_ns;
+}
+</code></pre><p>When playback starts, I record the current time in <code>clock_start_ns</code>. The playback clock is just &quot;now minus when we started.&quot; This clock advances continuously, and video frames must keep up.</p>
+<p>Here’s how the clock is used in the synchronization loop:</p>
+<p>Conceptually, the synchronization loop is simple: compare the frame’s presentation timestamp to the playback clock, and decide whether to render, drop, or wait.</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movycat.zig:177-220</span>
+<span class="hljs-keyword">if</span> (decoder.video.queue_count &gt; <span class="hljs-number">0</span>) {
+    <span class="hljs-keyword">if</span> (decoder.video.peekFrame()) |head| {
+        <span class="hljs-keyword">const</span> playback_time_ns = decoder.getPlaybackClock();
+        <span class="hljs-keyword">const</span> head_pts_i64 = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-meta">@intCast</span>(head.pts_ns));
+        <span class="hljs-keyword">const</span> audio_i64 = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-meta">@intCast</span>(playback_time_ns));
+        <span class="hljs-keyword">const</span> diff = head_pts_i64 - audio_i64;
+
+        controller.pkt_ctr += <span class="hljs-number">1</span>;
+
+        <span class="hljs-keyword">if</span> (diff &lt;= SYNC_WINDOW_NS and diff &gt;= -SYNC_WINDOW_NS) {
+            <span class="hljs-keyword">if</span> (decoder.video.popFrame()) |frame_ptr| {
+                controller.frame_ctr += <span class="hljs-number">1</span>;
+                <span class="hljs-comment">// ... render the frame</span>
+            }
+        } <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (diff &lt; -SYNC_WINDOW_NS) {
+            <span class="hljs-comment">// Video is behind - drop the frame!</span>
+            _ = decoder.video.popFrame();
+        } <span class="hljs-keyword">else</span> {
+            <span class="hljs-comment">// Too early -&gt; just wait a bit</span>
+            std.Thread.sleep(<span class="hljs-number">500</span>_000);
+        }
+    }
+}
+</code></pre><p>This is a three-way decision that runs every iteration of the main loop:</p>
+<ol>
+<li><strong>Within tolerance</strong>: The frame&#39;s PTS is close enough to the playback clock - render it now</li>
+<li><strong>Video behind</strong>: The frame is older than what we should be showing - drop it and move on</li>
+<li><strong>Video ahead</strong>: The frame isn&#39;t due yet - wait briefly and check again</li>
+</ol>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/timeline-diagram-sync-window-with-frame-pts-vs-audio-clock-illustrating-renderdropwait-decisions.png" alt="Timeline diagram sync window with frame PTS vs audio clock, illustrating render/drop/wait decisions" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Timeline diagram sync window with frame PTS vs audio clock, illustrating render/drop/wait decisions<br><small>Place image at: arender/output/movycat/real-time-video-from-decode-to-display/images/timeline-diagram-sync-window-with-frame-pts-vs-audio-clock-illustrating-renderdropwait-decisions.png</small></div>'">
+  </div>
+  <figcaption>Timeline diagram sync window with frame PTS vs audio clock, illustrating render/drop/wait decisions</figcaption>
+</figure>
+<h3 id="choosing-the-sync-window">Choosing the Sync Window</h3>
+<p>The sync tolerance is defined at the top of movycat.zig:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movycat.zig:17</span>
+<span class="hljs-keyword">var</span> SYNC_WINDOW_NS: <span class="hljs-built_in">i64</span> = <span class="hljs-number">10</span>_000_000;
+</code></pre><p>That&#39;s 10 milliseconds - frames within +/-10ms of the target time are acceptable. I arrived at this value through iteration. I started with +/-5ms, thinking tighter would be better. But then increased it, as frames were being dropped, causing unnecessary stuttering.</p>
+<p>The comparison logic uses a two-sided window because timing can go wrong in both directions. A frame might arrive late (video decoding was slow) or &quot;early&quot; (we processed packets faster than expected). Both need handling.</p>
+<h3 id="out-of-order-frames-a-lesson-from-the-decoder">Out-of-Order Frames: A Lesson from the Decoder</h3>
+<p>When testing various different video formats, I encountered a video where the output made no sense - frames appeared to be rendering in random order, creating visual noise. I went to the FFmpeg documentation to understand what was happening, and learned something important: <code>avcodec_receive_frame()</code> can deliver frames in decode order, not display order.</p>
+<p>Video codecs with B-frames (bidirectional prediction) decompress frames in a different sequence than their intended display order. The frame&#39;s <code>pts</code> field indicates the correct display time, and I need to respect that timestamp rather than assuming frames arrive sequentially. Here&#39;s how I extract the presentation timestamp:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:504-517</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> getFramePtsNS(self: *VideoState, frame: *c.AVFrame) !<span class="hljs-built_in">u64</span> {
+    <span class="hljs-keyword">const</span> pts = <span class="hljs-keyword">if</span> (frame.*.pts != c.AV_NOPTS_VALUE)
+        frame.*.pts
+    <span class="hljs-keyword">else</span>
+        frame.*.best_effort_timestamp;
+
+    <span class="hljs-keyword">if</span> (pts == c.AV_NOPTS_VALUE)
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.MissingPTS;
+
+    <span class="hljs-keyword">const</span> pts_f64 = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">f64</span>, <span class="hljs-meta">@floatFromInt</span>(pts));
+    <span class="hljs-keyword">const</span> seconds = pts_f64 * <span class="hljs-meta">@as</span>(<span class="hljs-built_in">f64</span>, <span class="hljs-meta">@floatFromInt</span>(self.time_base.num)) /
+        <span class="hljs-meta">@as</span>(<span class="hljs-built_in">f64</span>, <span class="hljs-meta">@floatFromInt</span>(self.time_base.den));
+    <span class="hljs-keyword">return</span> <span class="hljs-meta">@intFromFloat</span>(seconds * <span class="hljs-number">1</span>_000_000_000.<span class="hljs-number">0</span>);
+}
+</code></pre><p>The fallback to <code>best_effort_timestamp</code> handles cases where <code>pts</code> is unavailable. FFmpeg computes this estimate using various heuristics from the stream. The timestamp also needs conversion from the stream&#39;s time base (which varies per container format) to nanoseconds.</p>
+<p>Out-of-order delivery isn’t just a display-order problem. It also means the next frame you <em>receive</em> might already be too late to show - which makes frame dropping a first-class part of synchronization.</p>
+<h3 id="frame-dropping-the-unpleasant-necessity">Frame Dropping: The Unpleasant Necessity</h3>
+<p>When video falls behind audio, there&#39;s only one option: throw frames away. The line <code>_ = decoder.video.popFrame()</code> looks innocent, but it represents a hard truth about real-time systems - this is where theory collides with reality. You can&#39;t negotiate with time. If a frame&#39;s moment has passed, rendering it late makes things worse, not better.</p>
+<p>I initially tried to be &quot;clever&quot; about dropping - maybe skip every other frame instead of catching up immediately. That was a mistake. Partial measures just drag out the desync, creating a janky experience where audio and video never quite line up. Aggressive catching up (dropping all late frames) actually looks better because you get back in sync quickly.</p>
+<h3 id="the-audio-pipeline">The Audio Pipeline</h3>
+<p>For audio, I use SDL2&#39;s push-based audio queue. The SDL audio device is configured with the sample rate and channel count from the media file itself:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:867-899</span>
+<span class="hljs-keyword">const</span> audio_sample_rate = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">u32</span>, <span class="hljs-meta">@intCast</span>(codec_ctx.*.sample_rate));
+<span class="hljs-keyword">const</span> audio_channels =
+    <span class="hljs-meta">@as</span>(<span class="hljs-built_in">u32</span>, <span class="hljs-meta">@intCast</span>(codec_ctx.*.ch_layout.nb_channels));
+
+<span class="hljs-comment">// ... resampler setup ...</span>
+
+<span class="hljs-keyword">var</span> want: SDL.SDL_AudioSpec = .{
+    .format = SDL.AUDIO_S16SYS,
+    .freq = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">c_int</span>, <span class="hljs-meta">@intCast</span>(audio_sample_rate)),
+    .channels = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">u8</span>, <span class="hljs-meta">@intCast</span>(audio_channels)),
+    .samples = SAMPLE_BUF_SIZE,
+    .callback = <span class="hljs-literal">null</span>,
+    .userdata = <span class="hljs-literal">null</span>,
+};
+</code></pre><p>When an audio packet arrives from FFmpeg, it gets decoded, converted to 16-bit PCM, and pushed to SDL&#39;s queue. SDL consumes this queue at the device&#39;s native rate. As discussed earlier, I don&#39;t query SDL for playback position - I just push samples continuously and trust that the wall clock tracks what&#39;s audible.</p>
+<h3 id="handling-videos-without-audio">Handling Videos Without Audio</h3>
+<p>Not all videos have audio. movycat needs to handle videos without audio streams. The audio state is optional:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:80-86</span>
+<span class="hljs-keyword">var</span> audio: ?AudioState = <span class="hljs-literal">null</span>;
+<span class="hljs-keyword">const</span> audio_stream_index =
+    findStreamIndex(fmt_ctx, c.AVMEDIA_TYPE_AUDIO) <span class="hljs-keyword">catch</span> <span class="hljs-literal">null</span>;
+<span class="hljs-keyword">if</span> (audio_stream_index) |idx| {
+    audio = <span class="hljs-keyword">try</span> AudioState.init(allocator, fmt_ctx, idx);
+}
+</code></pre><p>When audio is absent, the playback clock still runs based on system time. The sync logic remains exactly the same - we compare frame timestamps against elapsed time.</p>
+<h2 id="zero-allocations-in-the-hot-path">Zero Allocations in the Hot Path</h2>
+<p>Once timing is correct, latency becomes the dominant constraint. The playback hot path has a fixed per-frame budget, and any unbounded work shows up immediately.</p>
+<p>For that reason, I avoided allocations during playback by design. Decoding, queuing, and rendering operate on preallocated structures with bounded cost per frame.</p>
+<p>At 30 frames per second, the budget is 33 milliseconds. After decode, scaling, rendering, and terminal output, there is effectively no headroom.</p>
+<p>The frame queue is therefore implemented as a fixed-size ring buffer:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:302-329</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">const</span> VideoState = <span class="hljs-keyword">struct</span> {
+    <span class="hljs-keyword">pub</span> <span class="hljs-keyword">const</span> MAX_VIDEO_FRAMES = <span class="hljs-number">1024</span>; <span class="hljs-comment">// max frame queue size</span>
+
+    <span class="hljs-comment">// ...</span>
+
+    <span class="hljs-comment">// frame queue</span>
+    frame_queue: [MAX_VIDEO_FRAMES]?VideoFrame = .{<span class="hljs-literal">null</span>} ** MAX_VIDEO_FRAMES,
+    queue_tail: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>,
+    queue_count: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>,
+    last_enqueued_pts_ns: <span class="hljs-built_in">u64</span> = <span class="hljs-number">0</span>, <span class="hljs-comment">// to detect duplicate frames</span>
+</code></pre><p>A fixed array of 1024 frame slots, the array exists for the lifetime of the decoder. New frames go in at <code>(queue_tail + queue_count) % MAX_VIDEO_FRAMES</code>, and consumed frames come out at <code>queue_tail</code>.</p>
+<h3 id="why-1024-frames">Why 1024 Frames?</h3>
+<p>The size came from estimating worst-case scenarios. At 30fps, 1024 frames is about 34 seconds of video. That&#39;s enough buffer for:</p>
+<ul>
+<li>Decode bursts where the CPU processes packets faster than real-time</li>
+<li>I/O hiccups where reading from disk stalls temporarily</li>
+<li>Temporary CPU spikes from other processes</li>
+</ul>
+<p>I experimented with smaller sizes. At 128 frames (~4 seconds), playback worked fine, but seeking exposed the limits - the buffer was too small to absorb decode warmup after a jump.</p>
+<p>I increased the size iteratively while testing different files. Seeking turned out to be surprisingly complex, and I’ll cover that in the next article. For now, 1024 frames provided enough headroom that buffer size stopped influencing playback behavior.</p>
+<p>The ring buffer stores <code>?VideoFrame</code> - optional frame references. Each slot is either <code>null</code> (empty) or contains a frame pointer and its presentation timestamp:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:23-28</span>
+<span class="hljs-keyword">const</span> VideoFrame = <span class="hljs-keyword">struct</span> {
+    frame: *c.AVFrame,
+    pts_ns: <span class="hljs-built_in">u64</span>,
+};
+</code></pre><p>Storing the PTS alongside the frame pointer avoids recomputing timestamps every time we check if a frame is ready to display. The computation involves floating-point division and multiplication, which isn&#39;t expensive once, but adds up when you&#39;re polling the queue hundreds of times per second.</p>
+<h3 id="enqueue-adding-frames-to-the-queue">Enqueue: Adding Frames to the Queue</h3>
+<p>When a frame is decoded and ready for playback, it goes into the ring buffer:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:695-726</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> enqueueDecodedFrame(self: *VideoState) !<span class="hljs-built_in">void</span> {
+    <span class="hljs-comment">// Drop the oldest if we&#x27;re full</span>
+    <span class="hljs-keyword">if</span> (self.queue_count &gt;= MAX_VIDEO_FRAMES) {
+        <span class="hljs-keyword">const</span> drop_idx = self.queue_tail;
+        <span class="hljs-keyword">if</span> (self.frame_queue[drop_idx]) |old_vf| {
+            c.av_frame_free(<span class="hljs-meta">@constCast</span>(<span class="hljs-meta">@ptrCast</span>(&amp;old_vf.frame)));
+            self.frame_queue[drop_idx] = <span class="hljs-literal">null</span>;
+        }
+        self.queue_tail = (self.queue_tail + <span class="hljs-number">1</span>) % MAX_VIDEO_FRAMES;
+        self.queue_count -= <span class="hljs-number">1</span>;
+    }
+
+    <span class="hljs-keyword">const</span> cloned_frame = c.av_frame_alloc() orelse <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.AllocFailed;
+    <span class="hljs-keyword">if</span> (c.av_frame_ref(cloned_frame, self.frame) &lt; <span class="hljs-number">0</span>)
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.RefFailed;
+
+    <span class="hljs-keyword">const</span> pts_ns = <span class="hljs-keyword">try</span> self.getFramePtsNS(cloned_frame);
+    <span class="hljs-keyword">if</span> (pts_ns == self.last_enqueued_pts_ns) {
+        <span class="hljs-comment">// Duplicate frame - discard</span>
+        c.av_frame_free(<span class="hljs-meta">@constCast</span>(<span class="hljs-meta">@ptrCast</span>(&amp;cloned_frame)));
+        <span class="hljs-keyword">return</span>;
+    }
+    self.last_enqueued_pts_ns = pts_ns;
+
+    <span class="hljs-keyword">const</span> index = (self.queue_tail + self.queue_count) % MAX_VIDEO_FRAMES;
+    self.frame_queue[index] = VideoFrame{
+        .frame = cloned_frame,
+        .pts_ns = pts_ns,
+    };
+    self.queue_count += <span class="hljs-number">1</span>;
+}
+</code></pre><p>The overflow policy is deliberate: when the queue is full, drop the <em>oldest</em> frame, not the newest. The oldest frame is the most likely to already be late for display. New frames at least have a chance of being rendered on time.</p>
+<p>There&#39;s also duplicate detection - some codecs can produce multiple frames with identical timestamps. Without the <code>last_enqueued_pts_ns</code> check, these would clog the queue with redundant data.</p>
+<h3 id="dequeue-taking-frames-out">Dequeue: Taking Frames Out</h3>
+<p>The consumer side is simpler:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:738-753</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> popFrame(self: *VideoState) ?*c.AVFrame {
+    <span class="hljs-keyword">if</span> (self.queue_count == <span class="hljs-number">0</span>) <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>;
+
+    <span class="hljs-keyword">const</span> maybe_vf = self.frame_queue[self.queue_tail];
+    <span class="hljs-keyword">if</span> (maybe_vf) |vf| {
+        <span class="hljs-keyword">const</span> frame = vf.frame;
+
+        self.frame_queue[self.queue_tail] = <span class="hljs-literal">null</span>;
+        self.queue_tail = (self.queue_tail + <span class="hljs-number">1</span>) % MAX_VIDEO_FRAMES;
+        self.queue_count -= <span class="hljs-number">1</span>;
+
+        <span class="hljs-keyword">return</span> frame;
+    }
+
+    <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>;
+}
+</code></pre><p>Classic FIFO with modulo wraparound. The <code>peekFrame()</code> function is similar but doesn&#39;t advance the tail pointer - it lets us check the next frame&#39;s PTS without committing to consume it.</p>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/diagram-of-ring-buffer-with-headtail-pointers-showing-enqueue-and-dequeue-positions.png" alt="Diagram of ring buffer with head/tail pointers showing enqueue and dequeue positions" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Diagram of ring buffer with head/tail pointers showing enqueue and dequeue positions<br><small>Place image at: arender/output/movycat/real-time-video-from-decode-to-display/images/diagram-of-ring-buffer-with-headtail-pointers-showing-enqueue-and-dequeue-positions.png</small></div>'">
+  </div>
+  <figcaption>Diagram of ring buffer with head/tail pointers showing enqueue and dequeue positions</figcaption>
+</figure>
+<h3 id="the-pre-sync-filter">The Pre-Sync Filter</h3>
+<p>Before a frame even enters the queue, there&#39;s a sync check:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:615-634</span>
+<span class="hljs-keyword">fn</span> shouldEnqueue(
+    self: *VideoState,
+    frame: *c.AVFrame,
+    audio_time_ns: <span class="hljs-built_in">i128</span>,
+    sync_window: <span class="hljs-built_in">i64</span>,
+    bypass_sync: <span class="hljs-built_in">bool</span>,
+) <span class="hljs-built_in">bool</span> {
+    <span class="hljs-keyword">if</span> (bypass_sync) <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;
+
+    <span class="hljs-keyword">const</span> pts_ns = self.getFramePtsNS(frame) <span class="hljs-keyword">catch</span> <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
+    <span class="hljs-keyword">const</span> diff = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-meta">@intCast</span>(pts_ns)) - <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-meta">@intCast</span>(audio_time_ns));
+    <span class="hljs-keyword">return</span> diff &gt;= -sync_window * <span class="hljs-number">2</span>;
+}
+</code></pre><p>This filters at decode time rather than render time. If a frame is more than twice the sync window behind, it&#39;s dead on arrival - don&#39;t even bother storing it. The render window stays tight (+/-10ms) for presentation, but the enqueue filter is intentionally looser (2x) to avoid dropping frames prematurely during bursty decode. The <code>bypass_sync</code> parameter exists for seeking, where we intentionally decode frames we don&#39;t intend to display (more on that in the next article).</p>
+<h2 id="the-40ms-render-budget">The 40ms Render Budget</h2>
+<p>Real-time systems need deadlines. Without them, problems hide until they become catastrophic. I added explicit timing checks to catch performance issues early:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movycat.zig:191-203</span>
+<span class="hljs-keyword">const</span> t_before = std.time.nanoTimestamp();
+decoder.video.renderFrameToSurface(frame_ptr, surface);
+<span class="hljs-keyword">const</span> t_after = std.time.nanoTimestamp();
+<span class="hljs-keyword">const</span> render_ns = t_after - t_before;
+
+<span class="hljs-keyword">if</span> (render_ns &gt; <span class="hljs-number">40</span>_000_000) {
+    movy.terminal.setColor(movy.color.WHITE);
+    std.debug.print(
+        <span class="hljs-string">&quot;Scaling / rendering frame took {} ns\n&quot;</span>,
+        .{render_ns},
+    );
+    <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.ScalingTooSlow;
+}
+</code></pre><p>40 milliseconds is a hard deadline, not a guideline. The render operation - scaling the decoded frame and mapping it to the terminal surface - should never exceed 40ms. When it does, something is wrong: the output size is too large, the CPU is overwhelmed, or there&#39;s a bug in the scaling code.</p>
+<p>I chose 40ms based on measuring actual render times across different videos and terminal sizes. The 40ms threshold catches genuine problems without triggering on occasional slow frames (which can happen during CPU spikes).</p>
+<h3 id="fail-fast-by-design">Fail-Fast by Design</h3>
+<p>I deliberately made exceeding the render budget returning an error, not a warning.</p>
+<p>The goal is not to degrade gracefully by dropping frames or trying harder. Playback is either smooth, or it stops. If the system can’t render frames within the budget, then it isn’t fast enough to play that video at that size, on that machine.</p>
+<p>Allowing the player to continue with stutter and uneven pacing would be a worse experience than simply refusing to play.</p>
+<h3 id="the-decode-timeout">The Decode Timeout</h3>
+<p>There&#39;s another deadline in the decode path:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:21</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">const</span> DECODE_TIMEOUT_NS = <span class="hljs-number">50</span>_000_000;
+
+<span class="hljs-comment">// File: movy/src/video/video.zig:600-613</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> tryReceiveFrame(self: *VideoState) !?*c.AVFrame {
+    <span class="hljs-keyword">const</span> t_before = std.time.nanoTimestamp();
+    <span class="hljs-keyword">const</span> res = c.avcodec_receive_frame(self.codec_ctx, self.frame);
+    <span class="hljs-keyword">const</span> t_after = std.time.nanoTimestamp();
+
+    <span class="hljs-keyword">const</span> decode_ns = t_after - t_before;
+    <span class="hljs-keyword">if</span> (decode_ns &gt; DECODE_TIMEOUT_NS) {
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.DecodingTooSlow;
+    }
+
+    <span class="hljs-keyword">if</span> (res == AVERROR_EAGAIN or res == c.AVERROR_EOF) <span class="hljs-keyword">return</span> <span class="hljs-literal">null</span>;
+    <span class="hljs-keyword">if</span> (res &lt; <span class="hljs-number">0</span>) <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.ReceiveFailed;
+    <span class="hljs-keyword">return</span> self.frame;
+}
+</code></pre><p>50ms for a single decode operation. FFmpeg&#39;s <code>avcodec_receive_frame()</code> shouldn&#39;t take that long for any reasonable video frame. When it does, something is wrong - corrupted data causing infinite loops, or a codec bug.</p>
+<h3 id="threaded-decoding-for-performance">Threaded Decoding for Performance</h3>
+<p>Another optimization that helps meet these deadlines is threaded decoding. FFmpeg supports parallelizing the decode work across multiple CPU cores. I configure this during codec initialization:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:362-364</span>
+<span class="hljs-keyword">const</span> thread_count = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">c_int</span>, <span class="hljs-meta">@intCast</span>(<span class="hljs-keyword">try</span> std.Thread.getCpuCount()));
+codec_ctx.*.thread_count = thread_count;
+codec_ctx.*.thread_type = c.FF_THREAD_FRAME;
+</code></pre><p><code>FF_THREAD_FRAME</code> tells FFmpeg to decode multiple frames in parallel - while one frame is being processed, the next is already starting. On a multi-core machine, this multiplies decode throughput for codecs that support it.</p>
+<p>With this enabled, movycat can comfortably play even 4K videos - the decode stage stays within budget.</p>
+<h2 id="putting-it-together-the-main-loop">Putting It Together: The Main Loop</h2>
+<p>Here’s how all the pieces interact in practice - this loop is where synchronization, buffering, and deadlines finally meet.</p>
+<p>The main playback loop in movycat does three things:</p>
+<ol>
+<li><strong>Check for ready frames</strong>: If there&#39;s a frame in the queue that should be rendered now, do it</li>
+<li><strong>Decode more frames</strong>: If the queue isn&#39;t full, read and process another packet</li>
+<li><strong>Handle end-of-file</strong>: When decoding is done and the queue is empty, stop</li>
+</ol>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movycat.zig:130-242</span>
+<span class="hljs-keyword">while</span> (!controller.isStopped()) {
+    loop_ctr += <span class="hljs-number">1</span>;
+
+    <span class="hljs-comment">// Handle input (pause, seek, etc.)</span>
+    <span class="hljs-keyword">if</span> (<span class="hljs-keyword">try</span> movy.input.get()) |event| {
+        <span class="hljs-comment">// ... input handling</span>
+    }
+
+    <span class="hljs-keyword">if</span> (controller.isPaused()) {
+        std.Thread.sleep(<span class="hljs-number">10</span>_000_000);
+        <span class="hljs-keyword">continue</span>;
+    }
+
+    <span class="hljs-comment">// FIRST: Check if a frame is ready to render</span>
+    <span class="hljs-keyword">if</span> (decoder.video.queue_count &gt; <span class="hljs-number">0</span>) {
+        <span class="hljs-comment">// ... sync logic and rendering (shown earlier)</span>
+    }
+
+    <span class="hljs-comment">// THEN: Decode only if queue is not full</span>
+    <span class="hljs-keyword">if</span> (decoder.video.queue_count &lt; movy_video.VideoState.MAX_VIDEO_FRAMES) {
+        <span class="hljs-keyword">const</span> playback_time_ns = decoder.getPlaybackClock();
+        <span class="hljs-keyword">switch</span> (<span class="hljs-keyword">try</span> decoder.processNextPacket(
+            SYNC_WINDOW_NS,
+            playback_time_ns,
+            <span class="hljs-literal">false</span>,
+        )) {
+            .eof =&gt; reached_end = <span class="hljs-literal">true</span>,
+            <span class="hljs-keyword">else</span> =&gt; {},
+        }
+    }
+
+    <span class="hljs-comment">// All frames processed</span>
+    <span class="hljs-keyword">if</span> (decoder.video.queue_count == <span class="hljs-number">0</span> and reached_end) {
+        controller.stop();
+    }
+
+    std.Thread.sleep(<span class="hljs-number">1</span>_000); <span class="hljs-comment">// breathing space for CPU</span>
+}
+</code></pre><p>The order matters. We check for renderable frames <em>before</em> trying to decode more. This ensures we&#39;re responsive to display timing even if decoding is slow. If we decoded first, a slow packet could cause us to miss a frame&#39;s deadline.</p>
+<p>The tiny sleep at the bottom (1 microsecond) prevents the loop from spinning at 100% CPU when there&#39;s nothing to do.</p>
+<h2 id="final-notes">Final Notes</h2>
+<p>Real-time video playback looks simple from the outside - files decode to frames, frames display on screen. The reality is a careful dance of timing, buffering, and hard deadlines.</p>
+<p>With a single playback clock, bounded queues, and explicit budgets, linear playback becomes predictable. Frames either arrive in time or they don’t. Late frames are dropped. Early frames wait. When something runs too slow, the system fails fast instead of drifting silently.</p>
+<p>This model holds as long as playback moves forward.</p>
+<p>In the next article, I’ll look at what happens when that assumption breaks - when the user seeks, pauses, or jumps through time, and all of these carefully aligned pieces have to be rebuilt again.</p>
+<hr>
+<p><em>This is the first article in &quot;The Making of movycat&quot; - a 4-part series about building a terminal video player in Zig.</em></p>
+
+      <nav class="article-nav">
+        <span class="nav-prev"></span>
+        <a href="../../index.html" class="nav-index">Index</a>
+        <a href="../when-simple-isnt-seeking-and-pausing/index.html" class="nav-next">Next: When Simple Isn't: Seeking and Pausing →</a>
+      </nav>
+    </main>
+  </div>
+
+  <script>
+    // Smooth scrolling for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Highlight current section in TOC
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.getAttribute('id');
+          document.querySelectorAll('.table-of-contents a').forEach(a => {
+            a.classList.remove('active');
+            if (a.getAttribute('href') === '#' + id) {
+              a.classList.add('active');
+            }
+          });
+        }
+      });
+    }, { rootMargin: '-100px 0px -66%' });
+
+    document.querySelectorAll('h2[id]').forEach(h => observer.observe(h));
+  </script>
+</body>
+</html>

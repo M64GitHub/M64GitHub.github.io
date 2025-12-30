@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="keywords" content="video seeking, keyframes, gop, ffmpeg, zig, terminal">
+  <meta name="article-part" content="2">
+  <title>When Simple Isn't: Seeking and Pausing</title>
+  <meta property="og:image" content="https://m64github.github.io/posts/movycat/when-simple-isnt-seeking-and-pausing/images/preview.png">
+  <meta property="og:title" content="When Simple Isn't: Seeking and Pausing">
+  <meta property="og:description" content="Why jumping in time breaks everything">
+  <link rel="stylesheet" href="../../article-style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <nav class="table-of-contents">
+<h2>Contents</h2>
+<ul>
+  <li ><a href="#keyframes-define-where-you-can-land">Keyframes Define Where You Can Land</a></li>
+  <li ><a href="#backward-seeks-are-worse">Backward Seeks Are Worse</a></li>
+  <li ><a href="#where-ffmpeg-actually-lands">Where FFmpeg Actually Lands</a></li>
+  <li ><a href="#seek-invalidates-decoder-state">Seek Invalidates Decoder State</a></li>
+  <li ><a href="#warmup-decoding">Warmup Decoding</a></li>
+  <li ><a href="#clock-rebasing-after-seek">Clock Rebasing After Seek</a></li>
+  <li ><a href="#discarding-the-old-timeline">Discarding the Old Timeline</a></li>
+  <li ><a href="#complete-seek-sequence">Complete Seek Sequence</a></li>
+  <li ><a href="#why-pause-is-not-trivial">Why Pause Is Not Trivial</a></li>
+  <li ><a href="#tracking-pause-duration">Tracking Pause Duration</a></li>
+  <li ><a href="#rebasing-time-on-resume">Rebasing Time on Resume</a></li>
+  <li ><a href="#explicit-playback-state">Explicit Playback State</a></li>
+  <li ><a href="#edge-cases">Edge Cases</a></li>
+  <li ><a href="#final-notes">Final Notes</a></li>
+</ul>
+</nav>
+
+    </aside>
+
+    <main class="article-content">
+      <div class="article-tags">
+    <span class="tag">#video seeking</span> <span class="tag">#keyframes</span> <span class="tag">#gop</span> <span class="tag">#ffmpeg</span> <span class="tag">#zig</span> <span class="tag">#terminal</span>
+  </div>
+<h1 id="when-simple-isn-39-t-seeking-and-pausing">When Simple Isn&#39;t: Seeking and Pausing</h1>
+<p class="article-subtitle">Why jumping in time breaks everything</p>
+<div class="article-byline">M. Schallner, 2025.12.30</div>
+<p><em>Time travel is not a constant-time operation</em></p>
+<p>The first article covered real-time playback: keeping audio and video in sync with zero allocations in the hot path. That machinery works when the user just presses play and watches.</p>
+<p>Then they press skip.</p>
+<p>The moment a user hits the right arrow key to jump 5 seconds forward, nearly every assumption that made playback work is suddenly invalid. The frame queue is full of frames from the wrong time. The audio buffer is playing the wrong samples. The decoder&#39;s internal state references frames that no longer exist. And both clocks - video and audio - are pointing at a moment that&#39;s now in the past.</p>
+<p>Pause is deceptively similar. &quot;Just stop updating&quot; seems obvious, but when you resume, the wall clock has advanced while your playback clocks haven&#39;t. Without careful bookkeeping, you get 10 seconds of desync for every 10 seconds paused.</p>
+<p>This article covers:</p>
+<ul>
+<li><strong>Video Seeking</strong> - keyframes, codec flushing, and the warmup dance required to land on a valid frame</li>
+<li><strong>Pause Tracking</strong> - clock rebasing so resume doesn&#39;t cause drift</li>
+</ul>
+<p>They&#39;re conceptually different problems, but both require understanding the same thing: playback clocks are not optional bookkeeping. They&#39;re the foundation that makes everything else work.</p>
+<h2 id="keyframes-define-where-you-can-land">Keyframes Define Where You Can Land</h2>
+<p><em>Video codecs don&#39;t store complete frames at every timestamp - you can only decode from specific starting points.</em></p>
+<p>When I first added seeking, my mental model was simple: tell FFmpeg &quot;go to timestamp X&quot; and start decoding from there. The reality is that video compression fundamentally breaks this assumption.</p>
+<p>Modern video codecs use three types of frames:</p>
+<ul>
+<li><strong>I-frames (keyframes)</strong>: Complete images, fully decodable on their own</li>
+<li><strong>P-frames</strong>: Predicted from previous frames - only store the differences</li>
+<li><strong>B-frames</strong>: Bidirectionally predicted from both past and future frames</li>
+</ul>
+<p>A typical encoding might have keyframes every 2-5 seconds. Everything between them is deltas. If the user wants to see the frame at timestamp 10.0s but the nearest keyframe is at 8.0s, the decoder must:</p>
+<ol>
+<li>Seek to the keyframe at 8.0s</li>
+<li>Decode 8.0s (I-frame)</li>
+<li>Decode 8.5s (P-frame, using 8.0s)</li>
+<li>Decode 9.0s (B-frame, using 8.0s and 9.5s)</li>
+<li>Continue until reaching 10.0s</li>
+</ol>
+<p>The user pressed &quot;skip 5 seconds&quot; but the player may have just done 2+ seconds of silent decoding to get there.</p>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/diagram-showing-gop-structure-with-i-p-b-frames-and-a-seek-target-landing-between-keyframes.png" alt="Diagram showing GOP structure with I, P, B frames and a seek target landing between keyframes" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Diagram showing GOP structure with I, P, B frames and a seek target landing between keyframes<br><small>Place image at: arender/output/movycat/when-simple-isnt-seeking-and-pausing/images/diagram-showing-gop-structure-with-i-p-b-frames-and-a-seek-target-landing-between-keyframes.png</small></div>'">
+  </div>
+  <figcaption>Diagram showing GOP structure with I, P, B frames and a seek target landing between keyframes</figcaption>
+</figure>
+<h2 id="backward-seeks-are-worse">Backward Seeks Are Worse</h2>
+<p><em>When seeking backward, the nearest usable keyframe might be much further back than expected.</em></p>
+<p>Forward seeks have a natural bound: you skip ahead, find the previous keyframe, decode forward to your target. The &quot;hidden work&quot; is at most one GOP (Group of Pictures) worth of frames.</p>
+<p>Backward seeks break this assumption. If you&#39;re at 10.0s and want to go to 5.0s, the keyframe at 4.0s might work. But what if the encoder placed keyframes at 0.0s and 6.0s? Now you need to decode from 0.0s all the way to 5.0s - potentially hundreds of frames.</p>
+<p>movycat handles this by adding a safety margin:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:104-109</span>
+<span class="hljs-keyword">if</span> (offset_ns &lt; <span class="hljs-number">0</span>) {
+    <span class="hljs-keyword">const</span> safe_seek_pos = <span class="hljs-meta">@max</span>(requested_pos - <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-number">5</span>_000_000_000), <span class="hljs-number">0</span>);
+    <span class="hljs-keyword">try</span> decoder.seekToTimestamp(safe_seek_pos, .backward);
+} <span class="hljs-keyword">else</span> {
+    <span class="hljs-keyword">try</span> decoder.seekToTimestamp(requested_pos, .forward);
+}
+</code></pre><p>For backward seeks, we request a position 5 seconds earlier than our actual target. This increases the chance of landing on a usable keyframe. The warmup decoding that follows will advance to the real target.</p>
+<h2 id="where-ffmpeg-actually-lands">Where FFmpeg Actually Lands</h2>
+<p><em>Seeking involves timestamp conversion, stream selection, and direction flags - all of which affect where you actually land.</em></p>
+<p>The actual FFmpeg seek is handled in the movy library:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:165-188</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> seekToTimestamp(
+    self: *VideoDecoder,
+    timestamp_ns: <span class="hljs-built_in">i64</span>,
+    direction: <span class="hljs-keyword">enum</span> { forward, backward },
+) !<span class="hljs-built_in">void</span> {
+    <span class="hljs-keyword">const</span> ts = <span class="hljs-meta">@divFloor</span>(
+        timestamp_ns * self.video.time_base.den,
+        self.video.time_base.num * <span class="hljs-number">1</span>_000_000_000,
+    );
+
+    <span class="hljs-keyword">const</span> flags = <span class="hljs-keyword">switch</span> (direction) {
+        .backward =&gt; c.AVSEEK_FLAG_BACKWARD,
+        .forward =&gt; <span class="hljs-number">0</span>,
+    };
+
+    <span class="hljs-keyword">if</span> (c.av_seek_frame(
+        self.video.fmt_ctx,
+        <span class="hljs-meta">@intCast</span>(self.video.stream_index),
+        ts,
+        flags,
+    ) &lt; <span class="hljs-number">0</span>)
+        <span class="hljs-keyword">return</span> <span class="hljs-keyword">error</span>.SeekFailed;
+
+    self.flushAndDrainCodecs();
+}
+</code></pre><p>The timestamp conversion deserves attention. movycat works in nanoseconds internally, but FFmpeg uses stream-specific time bases. A video might have a time base of 1/30000 (for 29.97fps content) or 1/48000 (matching audio sample rate). The formula <code>timestamp_ns * time_base.den / (time_base.num * 1_000_000_000)</code> converts from nanoseconds to the stream&#39;s native units.</p>
+<p>The <code>AVSEEK_FLAG_BACKWARD</code> flag tells FFmpeg to find the keyframe at or before the target timestamp. Without this flag, FFmpeg might seek to a keyframe after your target, which would miss the frame you wanted entirely for backward seeks.</p>
+<p>Note that <code>av_seek_frame</code> seeks within a specific stream (the video stream, identified by <code>stream_index</code>). Audio and video streams can have different time bases, and seeking on one doesn&#39;t automatically position the other correctly. This is another reason we need the warmup phase - to let both streams find their footing.</p>
+<h2 id="seek-invalidates-decoder-state">Seek Invalidates Decoder State</h2>
+<p><em>Internal decoder buffers hold references to frames that no longer exist - they must be explicitly flushed.</em></p>
+<p>FFmpeg&#39;s decoders maintain internal state. They cache reference frames, track prediction chains, and buffer packets for reordering. After a seek, all of this state references the old position. If you just start decoding from the new position, you get garbage.</p>
+<p>The fix is explicit flushing:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:191-218</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> flushAndDrainCodecs(self: *VideoDecoder) <span class="hljs-built_in">void</span> {
+    <span class="hljs-comment">// Flush video decoder buffers</span>
+    _ = c.avcodec_flush_buffers(self.video.codec_ctx);
+
+    <span class="hljs-comment">// Drain remaining video frames</span>
+    <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) {
+        <span class="hljs-keyword">const</span> frame_res = c.avcodec_receive_frame(
+            self.video.codec_ctx,
+            self.video.frame,
+        );
+        <span class="hljs-keyword">if</span> (frame_res == AVERROR_EAGAIN or
+            frame_res == c.AVERROR_EOF) <span class="hljs-keyword">break</span>;
+    }
+
+    <span class="hljs-comment">// Handle optional audio decoder</span>
+    <span class="hljs-keyword">if</span> (self.audio) |*a| {
+        _ = c.avcodec_flush_buffers(a.codec_ctx);
+
+        <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) {
+            <span class="hljs-keyword">const</span> audio_frame_res = c.avcodec_receive_frame(
+                a.codec_ctx,
+                a.frame,
+            );
+            <span class="hljs-keyword">if</span> (audio_frame_res == AVERROR_EAGAIN or
+                audio_frame_res == c.AVERROR_EOF) <span class="hljs-keyword">break</span>;
+        }
+    }
+}
+</code></pre><p><code>avcodec_flush_buffers()</code> tells the codec to drop its internal state. But that&#39;s not enough - there may still be frames sitting in output buffers. The drain loops call <code>avcodec_receive_frame()</code> repeatedly until they return <code>EAGAIN</code> or <code>EOF</code>, ensuring no stale frames leak into the new position.</p>
+<p>After flushing, the first several frames you decode may have garbage or invalid timestamps. The codec needs time to rebuild its internal reference structures. This is where warmup decoding comes in.</p>
+<h2 id="warmup-decoding">Warmup Decoding</h2>
+<p><em>After a seek, decode frames silently until the codec stabilizes and produces valid timestamps.</em></p>
+<p>Immediately after seeking and flushing, frames have unreliable presentation timestamps. The codec is rebuilding its state. movycat uses a multi-phase warmup to handle this:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:118-143</span>
+<span class="hljs-comment">// Phase 1: Decode 100 packets or until we see a valid video frame</span>
+<span class="hljs-keyword">var</span> warmup_attempts: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>;
+<span class="hljs-keyword">var</span> found_video = <span class="hljs-literal">false</span>;
+<span class="hljs-keyword">while</span> (warmup_attempts &lt; <span class="hljs-number">100</span> and
+    !found_video) : (warmup_attempts += <span class="hljs-number">1</span>)
+{
+    <span class="hljs-keyword">const</span> result = decoder.processNextPacket(<span class="hljs-number">0</span>, requested_pos, <span class="hljs-literal">true</span>);
+    <span class="hljs-keyword">if</span> (result <span class="hljs-keyword">catch</span> <span class="hljs-literal">null</span> == .handled_video) {
+        found_video = <span class="hljs-literal">true</span>;
+    }
+}
+
+<span class="hljs-comment">// Phase 2: Get accurate video timestamp (up to 150 more attempts)</span>
+<span class="hljs-keyword">const</span> actual_video_pts_ns =
+    <span class="hljs-keyword">try</span> seekAndWarmupToFrame(decoder, requested_pos);
+
+<span class="hljs-comment">// Phase 3: Feed audio packets to warm up audio decoder</span>
+<span class="hljs-keyword">var</span> warm_audio_attempts: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>;
+<span class="hljs-keyword">while</span> (warm_audio_attempts &lt; <span class="hljs-number">3000</span>) : (warm_audio_attempts += <span class="hljs-number">1</span>) {
+    <span class="hljs-keyword">const</span> r = decoder.processNextPacket(
+        <span class="hljs-number">0</span>,
+        <span class="hljs-meta">@intCast</span>(actual_video_pts_ns),
+        <span class="hljs-literal">false</span>,
+    );
+    <span class="hljs-keyword">if</span> (r <span class="hljs-keyword">catch</span> <span class="hljs-literal">null</span> == .handled_audio) <span class="hljs-keyword">break</span>;
+}
+</code></pre><p><strong>Phase 1</strong> decodes up to 100 packets with sync bypassed (<code>true</code> parameter) just to get the video decoder producing output again. The <code>bypass_sync</code> parameter is critical here - it tells <code>processNextPacket</code> to queue frames regardless of their timestamps:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:622-633</span>
+<span class="hljs-keyword">fn</span> shouldEnqueue(
+    self: *VideoState,
+    frame: *c.AVFrame,
+    audio_time_ns: <span class="hljs-built_in">i128</span>,
+    sync_window: <span class="hljs-built_in">i64</span>,
+    bypass_sync: <span class="hljs-built_in">bool</span>,
+) <span class="hljs-built_in">bool</span> {
+    <span class="hljs-keyword">if</span> (bypass_sync) <span class="hljs-keyword">return</span> <span class="hljs-literal">true</span>;
+
+    <span class="hljs-keyword">const</span> pts_ns = self.getFramePtsNS(frame) <span class="hljs-keyword">catch</span> <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
+    <span class="hljs-keyword">const</span> diff = <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-meta">@intCast</span>(pts_ns)) - <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-meta">@intCast</span>(audio_time_ns));
+    <span class="hljs-keyword">return</span> diff &gt;= -sync_window * <span class="hljs-number">2</span>;
+}
+</code></pre><p>During normal playback, frames that are more than twice the sync window behind get filtered out at the queue level - they&#39;d just be dropped later anyway. But after a seek, the clocks haven&#39;t been rebased yet, so every frame looks &quot;late.&quot; Without <code>bypass_sync</code>, the warmup would queue nothing.</p>
+<p><strong>Phase 2</strong> continues until we get a frame with a valid PTS (presentation timestamp):</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:194-226</span>
+<span class="hljs-keyword">fn</span> seekAndWarmupToFrame(
+    decoder: *movy_video.VideoDecoder,
+    target_ns: <span class="hljs-built_in">i64</span>,
+) !<span class="hljs-built_in">u64</span> {
+    <span class="hljs-keyword">const</span> warmup_limit = <span class="hljs-number">150</span>;
+
+    decoder.video.resetQueue();
+
+    <span class="hljs-keyword">var</span> tries: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>;
+    <span class="hljs-keyword">var</span> last_err: ?<span class="hljs-built_in">anyerror</span> = <span class="hljs-literal">null</span>;
+
+    <span class="hljs-keyword">while</span> (tries &lt; warmup_limit) : (tries += <span class="hljs-number">1</span>) {
+        <span class="hljs-keyword">const</span> result = decoder.processNextPacket(<span class="hljs-number">0</span>, target_ns, <span class="hljs-literal">true</span>);
+
+        <span class="hljs-keyword">if</span> (result) |status| {
+            <span class="hljs-keyword">if</span> (status == .handled_video) {
+                <span class="hljs-keyword">if</span> (decoder.video.popFrame()) |frame| {
+                    <span class="hljs-keyword">const</span> pts_ns = <span class="hljs-keyword">try</span> decoder.video.getFramePtsNS(frame);
+                    movy_video.VideoDecoder.freeAVFrame(frame);
+                    <span class="hljs-keyword">return</span> pts_ns;
+                }
+            }
+        } <span class="hljs-keyword">else</span> |e| {
+            last_err = e;
+        }
+
+        std.Thread.sleep(<span class="hljs-number">200</span>_000);
+    }
+
+    <span class="hljs-keyword">return</span> last_err orelse <span class="hljs-keyword">error</span>.SeekFailed;
+}
+</code></pre><p>This function tries up to 150 times to get a decodable frame with a valid timestamp. Each attempt sleeps 200 microseconds to avoid spinning. The returned <code>pts_ns</code> becomes the authoritative &quot;where we actually landed&quot; timestamp.</p>
+<p><strong>Phase 3</strong> warms up the audio decoder by feeding it packets until one produces output. Audio codecs have their own internal state that needs rebuilding.</p>
+<p>The specific limits (100, 150, 3000 packets) come from testing with various video files. Some heavily compressed videos need more warmup; these values handle everything I&#39;ve thrown at movycat.</p>
+<h2 id="clock-rebasing-after-seek">Clock Rebasing After Seek</h2>
+<p><em>After a seek, all playback clocks must be reset to the new position or sync will fail.</em></p>
+<p>The A/V sync system from Part 1 compares frame timestamps against <code>clock_start_ns</code> - the wall-clock time when playback began. After a seek, frame timestamps jump to a completely different value, but <code>clock_start_ns</code> is still based on the original start. The comparison becomes meaningless.</p>
+<p>The solution is to rebase all clocks:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:145-150</span>
+<span class="hljs-comment">// Realign clocks</span>
+<span class="hljs-keyword">const</span> now = std.time.nanoTimestamp();
+<span class="hljs-keyword">const</span> new_start_time = now - <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i128</span>, <span class="hljs-meta">@intCast</span>(actual_video_pts_ns));
+decoder.clock_start_ns = new_start_time;
+decoder.video.start_time_ns = new_start_time;
+</code></pre><p>This is the key insight: <code>clock_start_ns</code> should be set such that <code>now - clock_start_ns</code> equals the current playback position. If we&#39;re now at position 30.5s, and it&#39;s currently wall-clock time T, then <code>clock_start_ns = T - 30.5s</code>.</p>
+<p>After this rebasing, the sync comparison <code>frame_pts - (now - clock_start_ns)</code> produces meaningful values again.</p>
+<p>Part 1 described &quot;one clock to rule them all&quot; - the wall clock as the single source of truth. That&#39;s still true conceptually. But the implementation uses three <code>start_time</code> values (<code>clock_start_ns</code>, <code>video.start_time_ns</code>, <code>audio.start_time_ns</code>) because audio and video streams don&#39;t always start at the same timestamp. The first video frame might be at PTS 0, but the first audio sample might be at PTS 100ms. Each stream needs its own reference point to convert native timestamps to the common wall-clock timeline. The master <code>clock_start_ns</code> is the authority; the stream-specific values are offsets from it.</p>
+<p>Audio needs its own rebasing, handled in a subsequent loop that waits up to 250ms for a valid audio frame:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:152-178</span>
+<span class="hljs-keyword">if</span> (decoder.audio) |*audio| {
+    _ = SDL.SDL_ClearQueuedAudio(audio.audio_device);
+
+    <span class="hljs-keyword">const</span> deadline = std.time.nanoTimestamp() + <span class="hljs-number">250</span>_000_000;
+    <span class="hljs-keyword">var</span> rebased = <span class="hljs-literal">false</span>;
+
+    <span class="hljs-keyword">while</span> (std.time.nanoTimestamp() &lt; deadline) {
+        <span class="hljs-keyword">const</span> result = decoder.processNextPacket(
+            <span class="hljs-number">0</span>,
+            <span class="hljs-meta">@intCast</span>(actual_video_pts_ns),
+            <span class="hljs-literal">false</span>,
+        );
+        <span class="hljs-keyword">if</span> (result <span class="hljs-keyword">catch</span> <span class="hljs-literal">null</span> == .handled_audio) {
+            <span class="hljs-keyword">if</span> (audio.frame.*.pts != c.AV_NOPTS_VALUE) {
+                <span class="hljs-keyword">const</span> audio_pts_ns =
+                    <span class="hljs-keyword">try</span> audio.getAudioPtsNS(audio.frame);
+                audio.start_time_ns = std.time.nanoTimestamp() -
+                    <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i128</span>, <span class="hljs-meta">@intCast</span>(audio_pts_ns));
+                <span class="hljs-keyword">try</span> audio.convertAndQueueAudio(audio.frame);
+                rebased = <span class="hljs-literal">true</span>;
+                <span class="hljs-keyword">break</span>;
+            }
+        }
+    }
+
+    <span class="hljs-keyword">if</span> (!rebased) {
+        <span class="hljs-comment">// fallback</span>
+        audio.start_time_ns = new_start_time;
+    }
+}
+</code></pre><p>The check for <code>AV_NOPTS_VALUE</code> is important. FFmpeg uses this sentinel value (-9223372036854775808, or <code>INT64_MIN</code>) to indicate &quot;no timestamp available.&quot; Right after a seek, the codec is rebuilding its state and may produce frames without valid presentation timestamps. We keep trying until we get a frame with a real PTS, or until the 250ms deadline passes and we fall back to the video-based clock.</p>
+<h2 id="discarding-the-old-timeline">Discarding the Old Timeline</h2>
+<p><em>Queued frames and audio samples from the old position must be discarded - not just the decoder state.</em></p>
+<p>Before the warmup dance even begins, we need to clear the output queues:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:111-116</span>
+<span class="hljs-comment">// Flush</span>
+<span class="hljs-keyword">if</span> (decoder.audio) |*audio| {
+    _ = SDL.SDL_ClearQueuedAudio(audio.audio_device);
+}
+decoder.video.resetQueue();
+decoder.flushAndDrainCodecs();
+</code></pre><p><code>SDL_ClearQueuedAudio()</code> drops all samples waiting in SDL&#39;s audio buffer. Without this, you&#39;d hear a pop of old audio before the new position&#39;s audio arrives. Note that we call this function twice during the seek sequence - once here in the initial clearing, and again later before rebasing the audio clock. The second call ensures any audio samples that leaked through during warmup are also discarded.</p>
+<p><code>resetQueue()</code> empties the video frame ring buffer:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:728-736</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> resetQueue(self: *VideoState) <span class="hljs-built_in">void</span> {
+    <span class="hljs-keyword">while</span> (self.queue_count &gt; <span class="hljs-number">0</span>) {
+        <span class="hljs-keyword">if</span> (self.popFrame()) |f| {
+            VideoDecoder.freeAVFrame(f);
+        }
+    }
+    self.queue_tail = <span class="hljs-number">0</span>;
+    self.queue_count = <span class="hljs-number">0</span>;
+}
+</code></pre><p>This pops and frees every queued frame. The queue indices reset to zero.</p>
+<p>The order matters: clear output buffers first, then flush decoder internals, then warm up. If you warm up before clearing, you&#39;re adding new frames to a queue still full of old ones.</p>
+<p>The diagram below outlines the operations:</p>
+<figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/overview-diagram-showing-seek-operation.png" alt="Overview diagram showing seek operation" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Overview diagram showing seek operation<br><small>Place image at: arender/output/movycat/when-simple-isnt-seeking-and-pausing/images/overview-diagram-showing-seek-operation.png</small></div>'">
+  </div>
+  <figcaption>Overview diagram showing seek operation</figcaption>
+</figure>
+<h2 id="complete-seek-sequence">Complete Seek Sequence</h2>
+<p>Here&#39;s the full <code>skipTime()</code> function with the logical flow visible:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:90-191</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> skipTime(
+    self: *PlayerController,
+    decoder: *movy_video.VideoDecoder,
+    offset_ns: <span class="hljs-built_in">i64</span>,
+) !<span class="hljs-built_in">void</span> {
+    <span class="hljs-keyword">if</span> (self.isPaused()) <span class="hljs-keyword">return</span>;
+
+    <span class="hljs-keyword">const</span> current_pos: <span class="hljs-built_in">i64</span> =
+        <span class="hljs-meta">@intCast</span>(std.time.nanoTimestamp() - decoder.clock_start_ns);
+    <span class="hljs-keyword">const</span> requested_pos = <span class="hljs-meta">@max</span>(current_pos + offset_ns, <span class="hljs-number">0</span>);
+
+    <span class="hljs-keyword">if</span> (requested_pos &gt;= decoder.video.fmt_ctx.duration * <span class="hljs-number">1000</span>) <span class="hljs-keyword">return</span>;
+
+    <span class="hljs-comment">// Boundary checks: can&#x27;t seek before 0 or past the end.</span>
+    <span class="hljs-comment">// The duration multiplication by 1000 converts from FFmpeg&#x27;s</span>
+    <span class="hljs-comment">// microsecond duration to nanoseconds.</span>
+
+    <span class="hljs-comment">// 1. Perform the actual seek</span>
+    <span class="hljs-keyword">if</span> (offset_ns &lt; <span class="hljs-number">0</span>) {
+        <span class="hljs-keyword">const</span> safe_seek_pos = <span class="hljs-meta">@max</span>(requested_pos - <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i64</span>, <span class="hljs-number">5</span>_000_000_000), <span class="hljs-number">0</span>);
+        <span class="hljs-keyword">try</span> decoder.seekToTimestamp(safe_seek_pos, .backward);
+    } <span class="hljs-keyword">else</span> {
+        <span class="hljs-keyword">try</span> decoder.seekToTimestamp(requested_pos, .forward);
+    }
+
+    <span class="hljs-comment">// 2. Clear all stale data</span>
+    <span class="hljs-keyword">if</span> (decoder.audio) |*audio| {
+        _ = SDL.SDL_ClearQueuedAudio(audio.audio_device);
+    }
+    decoder.video.resetQueue();
+    decoder.flushAndDrainCodecs();
+
+    <span class="hljs-comment">// 3. Warmup phase 1: decode until video produces output</span>
+    <span class="hljs-keyword">var</span> warmup_attempts: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>;
+    <span class="hljs-keyword">var</span> found_video = <span class="hljs-literal">false</span>;
+    <span class="hljs-keyword">while</span> (warmup_attempts &lt; <span class="hljs-number">100</span> and !found_video) : (warmup_attempts += <span class="hljs-number">1</span>) {
+        <span class="hljs-keyword">const</span> result = decoder.processNextPacket(<span class="hljs-number">0</span>, requested_pos, <span class="hljs-literal">true</span>);
+        <span class="hljs-keyword">if</span> (result <span class="hljs-keyword">catch</span> <span class="hljs-literal">null</span> == .handled_video) {
+            found_video = <span class="hljs-literal">true</span>;
+        }
+    }
+
+    <span class="hljs-comment">// 4. Warmup phase 2: get accurate video timestamp</span>
+    <span class="hljs-keyword">const</span> actual_video_pts_ns = <span class="hljs-keyword">try</span> seekAndWarmupToFrame(decoder, requested_pos);
+
+    <span class="hljs-comment">// 5. Warmup phase 3: warm up audio decoder</span>
+    <span class="hljs-keyword">var</span> warm_audio_attempts: <span class="hljs-built_in">usize</span> = <span class="hljs-number">0</span>;
+    <span class="hljs-keyword">while</span> (warm_audio_attempts &lt; <span class="hljs-number">3000</span>) : (warm_audio_attempts += <span class="hljs-number">1</span>) {
+        <span class="hljs-keyword">const</span> r = decoder.processNextPacket(<span class="hljs-number">0</span>, <span class="hljs-meta">@intCast</span>(actual_video_pts_ns), <span class="hljs-literal">false</span>);
+        <span class="hljs-keyword">if</span> (r <span class="hljs-keyword">catch</span> <span class="hljs-literal">null</span> == .handled_audio) <span class="hljs-keyword">break</span>;
+    }
+
+    <span class="hljs-comment">// 6. Rebase video clocks</span>
+    <span class="hljs-keyword">const</span> now = std.time.nanoTimestamp();
+    <span class="hljs-keyword">const</span> new_start_time = now - <span class="hljs-meta">@as</span>(<span class="hljs-built_in">i128</span>, <span class="hljs-meta">@intCast</span>(actual_video_pts_ns));
+    decoder.clock_start_ns = new_start_time;
+    decoder.video.start_time_ns = new_start_time;
+
+    <span class="hljs-comment">// 7. Rebase audio clocks (with 250ms timeout)</span>
+    <span class="hljs-comment">// [audio rebasing code from earlier]</span>
+
+    <span class="hljs-comment">// 8. Reset accumulated pause time</span>
+    self.total_paused_ns = <span class="hljs-number">0</span>;
+}
+</code></pre><figure class="article-image">
+  <div class="image-placeholder">
+    <img src="images/timeline-diagram-showing-seek-operation-old-frames-discarded-codec-flushed-warmup-decoding-clock-rebase.png" alt="Timeline diagram showing seek operation: old frames discarded, codec flushed, warmup decoding, clock rebase" onerror="this.parentElement.innerHTML='<div class=placeholder-notice>Image: Timeline diagram showing seek operation: old frames discarded, codec flushed, warmup decoding, clock rebase<br><small>Place image at: arender/output/movycat/when-simple-isnt-seeking-and-pausing/images/timeline-diagram-showing-seek-operation-old-frames-discarded-codec-flushed-warmup-decoding-clock-rebase.png</small></div>'">
+  </div>
+  <figcaption>Timeline diagram showing seek operation: old frames discarded, codec flushed, warmup decoding, clock rebase</figcaption>
+</figure>
+<p>Eight distinct steps to handle what the user thinks of as &quot;jump forward 5 seconds.&quot; This is why seeking behavior varies between video players - each one makes different tradeoffs in this sequence.</p>
+<h2 id="why-pause-is-not-trivial">Why Pause Is Not Trivial</h2>
+<p><em>Pausing seems trivial until you realize wall-clock time keeps advancing while playback time doesn&#39;t.</em></p>
+<p>With seeking understood, pause seems simpler. Just stop calling the decode loop, right?</p>
+<p>The problem is the sync system. It compares frame PTS against <code>now - clock_start_ns</code>. During pause, <code>now</code> keeps incrementing. When you resume, the sync system sees frames that appear to be seconds (or minutes) behind the audio clock. It drops them. Audio plays; video is frozen.</p>
+<h2 id="tracking-pause-duration">Tracking Pause Duration</h2>
+<p><em>Record how long the pause lasted, then adjust all clocks by that amount on resume.</em></p>
+<p>The <code>PlayerController</code> maintains pause bookkeeping:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:24-28</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">const</span> PlayerController = <span class="hljs-keyword">struct</span> {
+    playback_state: PlayBackState = .stopped,
+    pause_start_ns: <span class="hljs-built_in">i128</span> = <span class="hljs-number">0</span>,
+    total_paused_ns: <span class="hljs-built_in">i128</span> = <span class="hljs-number">0</span>,
+    <span class="hljs-comment">// ...</span>
+};
+</code></pre><p><code>pause_start_ns</code> captures the playback clock at the moment of pause. <code>total_paused_ns</code> accumulates pause durations across multiple pause/resume cycles.</p>
+<p>When pause begins:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:42-48</span>
+<span class="hljs-keyword">if</span> (self.isPaused()) {
+    <span class="hljs-comment">// Pause audio and measure pause time</span>
+    self.pause_start_ns = decoder.getPlaybackClock();
+
+    <span class="hljs-keyword">if</span> (decoder.audio) |*a| {
+        a.pauseAudioPlayback(<span class="hljs-literal">true</span>);
+    }
+}
+</code></pre><p>We record the current playback position and tell SDL to stop draining the audio buffer. <code>pauseAudioPlayback(true)</code> prevents audio samples from being consumed while we&#39;re paused:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: movy/src/video/video.zig:1007-1009</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">fn</span> pauseAudioPlayback(self: *AudioState, pause_state: <span class="hljs-built_in">bool</span>) <span class="hljs-built_in">void</span> {
+    SDL.SDL_PauseAudioDevice(self.audio_device, <span class="hljs-keyword">if</span> (pause_state) <span class="hljs-number">1</span> <span class="hljs-keyword">else</span> <span class="hljs-number">0</span>);
+}
+</code></pre><h2 id="rebasing-time-on-resume">Rebasing Time on Resume</h2>
+<p><em>All clocks must be shifted forward by exactly the pause duration.</em></p>
+<p>When resume happens, we calculate how long the pause lasted and shift all clock references:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:49-63</span>
+} <span class="hljs-keyword">else</span> {
+    <span class="hljs-comment">// Continue audio and update clocks for av sync</span>
+    <span class="hljs-keyword">const</span> pause_end_ns = decoder.getPlaybackClock();
+    self.total_paused_ns += pause_end_ns - self.pause_start_ns;
+
+    decoder.video.start_time_ns +=
+        pause_end_ns - self.pause_start_ns;
+    decoder.clock_start_ns +=
+        pause_end_ns - self.pause_start_ns;
+    <span class="hljs-keyword">if</span> (decoder.audio) |*a| {
+        a.start_time_ns += pause_end_ns - self.pause_start_ns;
+
+        a.pauseAudioPlayback(<span class="hljs-literal">false</span>);
+    }
+}
+</code></pre><p>The key calculation: <code>pause_end_ns - self.pause_start_ns</code> is the wall-clock time that elapsed during pause. We add this to every <code>start_time_ns</code> value - video, audio, and master clock.</p>
+<p>After this adjustment, <code>now - clock_start_ns</code> returns the same playback position it would have if we&#39;d never paused. The sync comparison works correctly.</p>
+<p>The insight here is that <code>clock_start_ns</code> isn&#39;t &quot;when playback started&quot; but rather &quot;the wall-clock time that corresponds to playback position 0.&quot; By sliding it forward during pauses, we maintain that correspondence.</p>
+<h2 id="explicit-playback-state">Explicit Playback State</h2>
+<p><em>Explicit state tracking prevents impossible states and clarifies intent.</em></p>
+<p>The player uses a simple state enum:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:18-22</span>
+<span class="hljs-keyword">pub</span> <span class="hljs-keyword">const</span> PlayBackState = <span class="hljs-keyword">enum</span> {
+    playing,
+    stopped,
+    paused,
+};
+</code></pre><p>This might seem like overkill for three states, but it prevents a class of bugs. Without explicit state, you end up with boolean flags like <code>is_paused</code> and <code>is_stopped</code> that can get into inconsistent combinations.</p>
+<p>The main loop respects the state:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movycat.zig:172-175</span>
+<span class="hljs-keyword">if</span> (controller.isPaused()) {
+    std.Thread.sleep(<span class="hljs-number">10</span>_000_000);
+    <span class="hljs-keyword">continue</span>;
+}
+</code></pre><p>When paused, we sleep 10ms and skip the entire decode/render cycle. No frame processing happens. No clock drift accumulates beyond what we&#39;ve already tracked.</p>
+<h2 id="edge-cases">Edge Cases</h2>
+<p>Several edge cases required explicit handling:</p>
+<p><strong>Pause during seek:</strong> The <code>skipTime()</code> function returns early if paused:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:95</span>
+<span class="hljs-keyword">if</span> (self.isPaused()) <span class="hljs-keyword">return</span>;
+</code></pre><p>Seeking while paused would corrupt the clock state. Better to ignore the input.</p>
+<p><strong>Seek resets pause tracking:</strong> At the end of <code>skipTime()</code>:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movy_player.zig:190</span>
+self.total_paused_ns = <span class="hljs-number">0</span>;
+</code></pre><p>After a seek, the clocks are rebased from scratch. Any previously accumulated pause time is baked into the new clock values, so we reset the accumulator.</p>
+<p><strong>Pause at end of video:</strong> Not explicitly handled - when the queue empties and EOF is reached, the player stops regardless of pause state:</p>
+<pre><code class="hljs language-zig"><span class="hljs-comment">// File: src/movycat.zig:237-239</span>
+<span class="hljs-keyword">if</span> (decoder.video.queue_count == <span class="hljs-number">0</span> and reached_end) {
+    controller.stop();
+}
+</code></pre><h2 id="final-notes">Final Notes</h2>
+<p>Seeking and pausing forced the player to treat time as something that can be reset, not just advanced.</p>
+<p>Frames, audio, decoder state, and playback clocks all have to be discarded and rebuilt when the timeline jumps. Once that rebasing is done, the synchronization model from Part 1 becomes valid again and playback can continue predictably.</p>
+<p>With linear time restored - even after disruption - the next bottleneck is no longer <em>when</em> a frame should appear, but <em>how</em> it gets drawn.</p>
+<p>In the next article, I’ll shift focus to the rendering side: how movy maps video frames onto a terminal using half-blocks, compositing, and input-driven redraws, and why terminal graphics turn out to be a system of their own.</p>
+<hr>
+<p><em>Part 2 of &quot;The Making of movycat&quot; - a 4-part series about building a terminal video player in Zig.</em></p>
+
+      <nav class="article-nav">
+        <a href="../real-time-video-from-decode-to-display/index.html" class="nav-prev">← Previous: Real-Time Video: From Decode to Display</a>
+        <a href="../../index.html" class="nav-index">Index</a>
+        <span class="nav-next"></span>
+      </nav>
+    </main>
+  </div>
+
+  <script>
+    // Smooth scrolling for TOC links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    // Highlight current section in TOC
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.getAttribute('id');
+          document.querySelectorAll('.table-of-contents a').forEach(a => {
+            a.classList.remove('active');
+            if (a.getAttribute('href') === '#' + id) {
+              a.classList.add('active');
+            }
+          });
+        }
+      });
+    }, { rootMargin: '-100px 0px -66%' });
+
+    document.querySelectorAll('h2[id]').forEach(h => observer.observe(h));
+  </script>
+</body>
+</html>

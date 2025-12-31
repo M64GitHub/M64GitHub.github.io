@@ -1,1 +1,385 @@
-Hello World
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="M64 - Systems programmer. Zig, terminal graphics, emulators, electronics.">
+  <meta property="og:title" content="M64">
+  <meta property="og:description" content="Systems programmer. C64 assembly to Zig. Terminal graphics, emulators, electronics.">
+  <meta property="og:image" content="https://m64github.github.io/posts/m64logo-600.png">
+  <meta property="og:type" content="website">
+  <title>M64</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-primary: #111111;
+      --bg-secondary: #0a0a0a;
+      --text-primary: #d4d4d4;
+      --text-muted: #888888;
+      --text-dim: #555555;
+
+      --accent-cyan: #4fd1c5;
+      --accent-cyan-glow: rgba(79, 209, 197, 0.4);
+      --accent-lavender: #b794f4;
+      --accent-amber: #fbbf24;
+
+      --font-mono: 'IBM Plex Mono', 'SF Mono', 'Fira Code', monospace;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+      --content-width: 640px;
+      --section-gap: 48px;
+      --transition-base: 0.3s ease;
+      --glow-duration: 6s;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: 17px;
+      font-weight: 350;
+      line-height: 1.7;
+      color: var(--text-primary);
+      background-color: var(--bg-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.015) 2px,
+        rgba(0, 0, 0, 0.015) 4px
+      );
+      z-index: 1000;
+    }
+
+    ::selection {
+      background: rgba(79, 209, 197, 0.25);
+      color: var(--text-primary);
+    }
+
+    .container {
+      max-width: var(--content-width);
+      margin: 0 auto;
+      padding: 80px 24px 60px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .logo img {
+      width: 240px;
+      height: auto;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      filter: drop-shadow(0 0 8px var(--accent-cyan-glow));
+      animation: logoGlow var(--glow-duration) ease-in-out infinite;
+    }
+
+    @keyframes logoGlow {
+      0%, 100% {
+        filter: drop-shadow(0 0 8px rgba(79, 209, 197, 0.3));
+      }
+      50% {
+        filter: drop-shadow(0 0 16px rgba(79, 209, 197, 0.5))
+                drop-shadow(0 0 24px rgba(183, 148, 244, 0.2));
+      }
+    }
+
+    .intro {
+      text-align: center;
+      margin-bottom: var(--section-gap);
+    }
+
+    .profile-photo {
+      width: 140px;
+      height: 140px;
+      margin: 0 auto 32px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid rgba(79, 209, 197, 0.25);
+      box-shadow:
+        0 0 0 4px rgba(79, 209, 197, 0.05),
+        0 0 30px rgba(79, 209, 197, 0.08);
+      animation: photoGlow 8s ease-in-out infinite;
+    }
+
+    .photo-placeholder {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a1a1a 0%, #252525 50%, #1a1a1a 100%);
+    }
+
+    .profile-photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    @keyframes photoGlow {
+      0%, 100% {
+        border-color: rgba(79, 209, 197, 0.25);
+        box-shadow:
+          0 0 0 4px rgba(79, 209, 197, 0.05),
+          0 0 30px rgba(79, 209, 197, 0.08);
+      }
+      50% {
+        border-color: rgba(79, 209, 197, 0.35);
+        box-shadow:
+          0 0 0 4px rgba(79, 209, 197, 0.08),
+          0 0 40px rgba(79, 209, 197, 0.12);
+      }
+    }
+
+    h1 {
+      font-family: var(--font-sans);
+      font-size: 32px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 24px;
+      color: var(--text-primary);
+    }
+
+    .intro .bio {
+      font-size: 18px;
+      font-weight: 350;
+      line-height: 1.8;
+      color: var(--text-muted);
+      max-width: 540px;
+      margin: 0 auto;
+    }
+
+    .highlight {
+      color: var(--accent-cyan);
+      font-weight: 450;
+      transition: text-shadow var(--transition-base);
+    }
+
+    .highlight:hover {
+      text-shadow: 0 0 12px rgba(79, 209, 197, 0.4);
+    }
+
+    .content-section {
+      margin-bottom: var(--section-gap);
+    }
+
+    .section-header {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--accent-cyan);
+      margin-bottom: 16px;
+      letter-spacing: 0.02em;
+    }
+
+    .section-header .comment {
+      color: var(--text-dim);
+      margin-right: 8px;
+      font-weight: 300;
+    }
+
+    .content-section p {
+      font-size: 16px;
+      font-weight: 350;
+      line-height: 1.75;
+      color: var(--text-muted);
+    }
+
+    .arrow {
+      color: var(--text-dim);
+      margin: 0 4px;
+      font-weight: 300;
+    }
+
+    .project {
+      color: var(--accent-amber);
+      font-weight: 450;
+    }
+
+    .project-link {
+      color: var(--accent-amber);
+      font-weight: 450;
+      text-decoration: none;
+      padding: 1px 4px;
+      margin: -1px -4px;
+      border-radius: 3px;
+      transition: background-color var(--transition-base);
+    }
+
+    .project-link:hover {
+      background-color: rgba(251, 191, 36, 0.12);
+    }
+
+    .links-list {
+      display: flex;
+      flex-direction: row;
+      gap: 32px;
+    }
+
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: 400;
+      transition: color var(--transition-base);
+    }
+
+    .nav-link:hover {
+      color: var(--accent-cyan);
+    }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.9em;
+      color: var(--accent-cyan);
+      background: rgba(79, 209, 197, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .footer {
+      text-align: center;
+      max-width: var(--content-width);
+      margin: 32px auto 0;
+      padding: 0 24px 40px;
+    }
+
+    .footer-line {
+      border: none;
+      border-top: 1px solid var(--text-dim);
+      margin-bottom: 24px;
+      opacity: 0.4;
+    }
+
+    .footer p {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    @media (max-width: 640px) {
+      :root {
+        --section-gap: 40px;
+      }
+
+      body {
+        font-size: 16px;
+      }
+
+      .container {
+        padding: 60px 20px 80px;
+      }
+
+      .logo img {
+        width: 180px;
+      }
+
+      .hero {
+        margin-bottom: 48px;
+      }
+
+      .profile-photo {
+        width: 120px;
+        height: 120px;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .intro .bio {
+        font-size: 16px;
+      }
+
+      .section-header {
+        font-size: 18px;
+      }
+
+      .content-section p {
+        font-size: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <div class="logo">
+        <img src="posts/m64logo-600.png" alt="M64">
+      </div>
+    </header>
+
+    <section class="intro">
+      <div class="profile-photo">
+        <img src="m64.png" alt="M64">
+      </div>
+      <h1>Hi, I'm <span class="highlight">M64</span>!</h1>
+      <p class="bio">
+        I love pixels. Started pushing them around on a C64 in assembly. Never stopped loving the low level. Now I write systems code in <span class="highlight">Zig</span> - low level networking, emulators, terminal graphics, the occasional game. When not coding, I'm soldering ESP32s or making music on Game Boys.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2 class="section-header"><span class="comment">//</span> Init</h2>
+      <p>
+        Systems programmer. C64 assembly <span class="arrow">→</span> Intel assembly <span class="arrow">→</span> C/C++ <span class="arrow">→</span> Zig.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2 class="section-header"><span class="comment">//</span> Main Loop</h2>
+      <p>
+        Terminal graphics, animations, games (<a href="https://github.com/M64GitHub/movy" class="project-link">movy</a>, upcoming projects) and tools. High-performance systems work (e.g. <code>io_uring</code>). LLM inference interfacing tools/apps.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2 class="section-header"><span class="comment">//</span> I/O</h2>
+      <p>
+        Electronics background - I like to play around with ESP32, STM32, and similar. Bridging circuits, code, sound, and pixels.
+      </p>
+    </section>
+
+    <section class="content-section">
+      <h2 class="section-header"><span class="comment">//</span> Exit</h2>
+      <nav class="links-list">
+        <a href="https://m64github.github.io/posts/" class="nav-link">[blog]</a>
+        <a href="mailto:m64.overdrive@gmail.com" class="nav-link">[email]</a>
+        <a href="https://x.com/M4Ri064" class="nav-link">[x]</a>
+      </nav>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <hr class="footer-line">
+    <p>M64 / Mario Schallner · 2025 / Vienna</p>
+    <p>Made with &lt;3 and Zig</p>
+  </footer>
+</body>
+</html>

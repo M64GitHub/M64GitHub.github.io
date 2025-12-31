@@ -41,7 +41,8 @@
 <li>movycat: <a href="https://github.com/M64GitHub/movycat">https://github.com/M64GitHub/movycat</a></li>
 <li>movy: <a href="https://github.com/M64GitHub/movy">https://github.com/M64GitHub/movy</a></li>
 </ul>
-<p>This is the first article in &quot;The Making of movycat&quot; - a behind-the-scenes look at building a terminal video player in Zig. When I started, I thought it would be straightforward: I could already render frames in the terminal, and FFmpeg can decode pretty much any video format. How hard could it be to wire them together?</p>
+<p>This is the first article in &quot;The Making of movycat&quot; - a behind-the-scenes look at building a terminal video player in Zig. </p>
+<p>When I started, I thought it would be straightforward: I could already render frames in the terminal, and FFmpeg can decode pretty much any video format. How hard could it be to wire them together?</p>
 <p>Within seconds of playback, audio and video were visibly drifting. Effects missed their beats. Pausing broke timing. Seeking made everything fall apart.</p>
 <p>Turns out, there&#39;s a gap between &quot;decode frames and display them&quot; and &quot;build a video player.&quot;</p>
 <p>This series documents what I discovered along the way - the hidden complexity, the surprising gotchas, and the solutions I built. Not API tutorials, but what it takes to make the pieces actually work together.</p>
